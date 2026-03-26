@@ -6,7 +6,7 @@ const { loadRules } = require('../scripts/lib/rules-loader.cjs');
 describe('rules-loader', () => {
   const rulesDir = path.join(__dirname, '..', 'rules');
 
-  it('loads all 6 rule files', () => {
+  it('loads all 7 rule files', () => {
     const rules = loadRules(rulesDir);
     assert.ok(rules.kwcag22);
     assert.ok(rules.securecoding49);
@@ -14,6 +14,7 @@ describe('rules-loader', () => {
     assert.ok(rules.webstandard);
     assert.ok(rules.egov);
     assert.ok(rules.quality);
+    assert.ok(rules.webvuln);
   });
 
   it('each rule file has version and rules array', () => {

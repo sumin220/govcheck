@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const RULE_FILES = ['kwcag22', 'securecoding49', 'privacy', 'webstandard', 'egov', 'quality'];
+const RULE_FILES = ['kwcag22', 'securecoding49', 'privacy', 'webstandard', 'egov', 'quality', 'webvuln'];
 
 function loadRules(rulesDir) {
   const rules = {};

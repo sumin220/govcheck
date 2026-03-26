@@ -2,7 +2,7 @@
 
 공공기관 프로젝트 통합 점검 Claude Code Plugin
 
-A Claude Code plugin that checks Korean government (eGovFramework) project compliance across 6 domains.
+A Claude Code plugin that checks Korean government (eGovFramework) project compliance across 7 domains.
 
 ## Installation
 
@@ -37,7 +37,7 @@ Plugins > Discover > "govcheck" > Space to install
 /govcheck-diff --committed               # 마지막 커밋 변경분
 ```
 
-## 6 Compliance Domains
+## 7 Compliance Domains
 
 | Domain | Description | Rules |
 |--------|-------------|-------|
@@ -47,6 +47,7 @@ Plugins > Discover > "govcheck" > Space to install
 | **개인정보보호** | 개인정보 노출 진단 | 9 items |
 | **eGov 호환성** | 전자정부프레임워크 호환성 | 8 items |
 | **GS인증 대비** | ISO 25010 기반 품질특성 | 12 items |
+| **웹취약점** | KISA 주요정보통신기반시설 + OWASP Top 10 | 22 items |
 
 ## Configuration
 
@@ -60,7 +61,8 @@ Create `.govcheckrc.json` in your project root:
     "securecoding": true,
     "privacy": true,
     "egovCompat": true,
-    "quality": true
+    "quality": true,
+    "webvuln": true
   },
   "paths": {
     "jsp": "src/main/webapp/**/*.jsp",

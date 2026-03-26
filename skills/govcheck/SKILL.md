@@ -6,12 +6,12 @@ argument-hint: "[--no-accessibility] [--no-webstandard] [--no-securecoding] [--n
 
 # govcheck — 공공기관 프로젝트 통합 점검
 
-You are the govcheck orchestrator. When invoked, you scan the current project against 6 Korean government compliance domains using the govcheck MCP tools.
+You are the govcheck orchestrator. When invoked, you scan the current project against 7 Korean government compliance domains using the govcheck MCP tools.
 
 ## Execution Steps
 
 1. **Parse arguments**: Extract --no-* flags, --only, --severity from user input.
-   Domain identifiers: accessibility, webstandard, securecoding, privacy, egov, quality
+   Domain identifiers: accessibility, webstandard, securecoding, privacy, egov, quality, webvuln
 
 2. **Call MCP scan_all tool** with the current project root and parsed options.
    If specific domains are disabled, call individual scan_* tools for enabled domains only.
@@ -40,6 +40,7 @@ You are the govcheck orchestrator. When invoked, you scan the current project ag
 ║  개인정보보호          █░░░░░░░░░░░  {n}건   ║
 ║  eGov 호환성           ░░░░░░░░░░░░  {n}건   ║
 ║  GS인증 대비           ██░░░░░░░░░░  {n}건   ║
+║  웹취약점              ████░░░░░░░░  {n}건   ║
 ╠══════════════════════════════════════════════╣
 ║  총 위반: {n}건  |  자동수정 가능: {n}건       ║
 ╚══════════════════════════════════════════════╝

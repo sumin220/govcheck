@@ -9,7 +9,8 @@ const DEFAULTS = {
     securecoding: true,
     privacy: true,
     egovCompat: true,
-    quality: true
+    quality: true,
+    webvuln: true
   },
   paths: {
     jsp: 'src/main/webapp/**/*.jsp',
