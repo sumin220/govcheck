@@ -1,0 +1,116 @@
+{
+  "version": "2026.1",
+  "standard": "개인정보보호법 준수 점검",
+  "lastUpdated": "2026-03-26",
+  "source": "https://www.pipc.go.kr",
+  "rules": [
+    {
+      "id": "P-01",
+      "title": "주민등록번호",
+      "description": "소스 코드나 설정 파일에 주민등록번호가 하드코딩되어 있으면 개인정보보호법 위반입니다.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "\\d{6}-[1-4]\\d{6}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "고유식별정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-02",
+      "title": "전화번호",
+      "description": "소스 코드에 전화번호가 하드코딩되어 있으면 개인정보 노출 위험이 있습니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "01[016789]-?\\d{3,4}-?\\d{4}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "개인정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-03",
+      "title": "이메일 하드코딩",
+      "description": "소스 코드에 이메일 주소가 하드코딩되어 있으면 개인정보 노출 위험이 있습니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "개인정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-04",
+      "title": "카드번호",
+      "description": "소스 코드에 신용카드 번호가 하드코딩되어 있으면 금융정보 유출 위험이 있습니다.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "\\d{4}-?\\d{4}-?\\d{4}-?\\d{4}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "금융정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-05",
+      "title": "계좌번호",
+      "description": "소스 코드에 은행 계좌번호가 하드코딩되어 있으면 금융정보 유출 위험이 있습니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "\\d{3,6}-\\d{2,6}-\\d{2,6}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "금융정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-06",
+      "title": "주석 내 개인정보",
+      "description": "주석에 개인정보(주민번호, 전화번호 등)가 포함되어 있으면 코드 리뷰나 소스 유출 시 노출될 수 있습니다.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "(\\/\\/|/\\*|<!--).*?(\\d{6}-[1-4]\\d{6}|01[016789]-?\\d{3,4}-?\\d{4})",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "css"],
+      "category": "주석 내 개인정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-07",
+      "title": "로그 내 개인정보",
+      "description": "로그에 개인정보를 출력하면 로그 파일을 통해 개인정보가 유출될 수 있습니다.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "(log|logger)\\.(info|debug|warn|error)\\(.*?(password|passwd|pwd|ssn|주민|핸드폰|전화|email|이메일)",
+      "patternType": "regex",
+      "fileTypes": ["java"],
+      "category": "로그 내 개인정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-08",
+      "title": "여권번호",
+      "description": "소스 코드에 여권번호가 하드코딩되어 있으면 개인정보 노출 위험이 있습니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "[A-Z]{1,2}\\d{7,8}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "고유식별정보",
+      "autoFixable": false
+    },
+    {
+      "id": "P-09",
+      "title": "운전면허번호",
+      "description": "소스 코드에 운전면허번호가 하드코딩되어 있으면 개인정보 노출 위험이 있습니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "\\d{2}-\\d{2}-\\d{6}-\\d{2}",
+      "patternType": "regex",
+      "fileTypes": ["java", "jsp", "html", "js", "properties", "xml", "sql", "txt", "csv"],
+      "category": "고유식별정보",
+      "autoFixable": false
+    }
+  ]
+}
