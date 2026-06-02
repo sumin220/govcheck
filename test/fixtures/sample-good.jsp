@@ -46,6 +46,17 @@
         </tr>
       </tbody>
     </table>
+
+    <a href="https://example.com" target="_blank" title="외부 사이트 (새 창 열림)">외부 링크 <span class="visually-hidden">새 창 열림</span></a>
+    <button type="button" id="detailBtn" data-href="/detail">클릭 가능한 버튼</button>
+    <select id="category" name="category">
+      <option value="1">항목1</option>
+    </select>
+    <button type="button" id="searchBtn">검색</button>
+    <img src="/seoulgallery/common/ckeditor/getImg.do?uniqueId=123" alt="프로그램 안내 포스터" width="1080">
+    <a href="/detail" style="display:block"><div class="card-box"><img src="/img.jpg" alt="카드 이미지"></div></a>
+    <img alt="" src="/images/decoration.svg" aria-hidden="true">
+    <style>a:focus-visible { outline: 2px solid #000; }</style>
   </main>
 </body>
 </html>

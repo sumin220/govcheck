@@ -1,8 +1,9 @@
 {
-  "version": "2026.1",
+  "version": "2026.2",
   "standard": "KWCAG 2.2 (한국형 웹 콘텐츠 접근성 지침 2.2)",
-  "lastUpdated": "2026-03-26",
+  "lastUpdated": "2026-06-02",
   "source": "https://www.wa.or.kr/kwcag22",
+  "auditSource": "서울갤러리 KWCAG 2.2 1차 심사 (2026-05-15, WebWatch) — A-34/36/37/38/41 신규, A-25/A-09 보정, A-40 수동점검",
   "rules": [
     {
       "id": "A-01",
@@ -103,14 +104,16 @@
     {
       "id": "A-09",
       "title": "명도대비 하드코딩 색상",
-      "description": "인라인 스타일에서 직접 색상을 지정하면 명도 대비를 검증하기 어렵습니다. CSS 클래스를 사용해야 합니다.",
+      "description": "직접 지정한 텍스트 색상은 명도 대비 4.5:1 이상인지 수동 검증이 필요합니다. background-color/border-color는 제외하고 텍스트 color만 탐지합니다.",
       "severity": "warning",
-      "tier": "T1",
-      "pattern": "style=\".*color:.*#",
+      "tier": "T2",
+      "pattern": "(?<![\\w-])color\\s*:\\s*#[0-9a-fA-F]{3,8}",
       "patternType": "regex",
       "fileTypes": ["html", "jsp", "vue", "ejs", "css"],
       "category": "명도 대비",
-      "autoFixable": false
+      "kwcagItem": 8,
+      "autoFixable": false,
+      "auditRef": "1-8,9-8,11-8,13-8 명도 대비 미달"
     },
     {
       "id": "A-10",
@@ -294,15 +297,17 @@
     },
     {
       "id": "A-25",
-      "title": "초점 표시 가시성",
-      "description": "키보드 초점이 이동할 때 시각적으로 명확히 표시되어야 합니다. outline:none 등으로 초점 표시를 제거하면 안 됩니다.",
+      "title": "초점 표시 제거 감지",
+      "description": "outline:none 또는 outline:0으로 키보드 초점 표시를 제거하면 키보드 사용자가 현재 위치를 알 수 없습니다. :focus-visible로 대체 표시를 제공하세요.",
       "severity": "warning",
-      "tier": "T3",
-      "pattern": "",
-      "patternType": "claude",
+      "tier": "T2",
+      "pattern": "outline\\s*:\\s*(none|0(?!\\.))",
+      "patternType": "regex",
       "fileTypes": ["html", "jsp", "vue", "ejs", "css"],
       "category": "키보드 접근",
-      "autoFixable": false
+      "kwcagItem": 11,
+      "autoFixable": false,
+      "auditRef": "0-11,1-11,9-11,14-11 초점 위치 시각적 미표시"
     },
     {
       "id": "A-26",
@@ -399,6 +404,90 @@
       "fileTypes": ["html", "jsp", "vue", "ejs"],
       "category": "입력 서식",
       "autoFixable": false
+    },
+    {
+      "id": "A-34",
+      "title": "새 창 열림 안내 누락",
+      "description": "target=\"_blank\"로 새 창을 여는 링크에 새 창 열림 안내(title 속성, aria-label, visually-hidden 텍스트)가 없습니다.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "a[target='_blank']",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "사용자 요구",
+      "kwcagItem": 26,
+      "autoFixable": false,
+      "auditRef": "3-26 새 창 알림 미제공"
+    },
+    {
+      "id": "A-36",
+      "title": "div/span onclick 키보드 미지원",
+      "description": "div/span 등 비인터랙티브 요소에 onclick을 쓰면서 tabindex와 role이 없으면 키보드로 조작할 수 없습니다. <a>/<button>으로 교체하거나 role+tabindex를 추가하세요.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "[onclick]:not(a):not(button):not(input):not(select):not(textarea):not([tabindex]):not([role])",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "키보드 접근",
+      "kwcagItem": 10,
+      "autoFixable": false,
+      "auditRef": "2-10 div.img-box onclick 키보드 접근 불가"
+    },
+    {
+      "id": "A-37",
+      "title": "select onchange 자동 실행",
+      "description": "select에 onchange로 자동 페이지 갱신/이동을 트리거하면 키보드 사용자에게 의도치 않은 동작이 발생합니다. 별도 실행 버튼을 제공하세요.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "select[onchange]",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "사용자 요구",
+      "kwcagItem": 26,
+      "autoFixable": false,
+      "auditRef": "10-26 select onchange 자동 갱신"
+    },
+    {
+      "id": "A-38",
+      "title": "CK Editor 본문 이미지 alt 누락",
+      "description": "CK Editor로 등록된 본문 이미지(ckeditor/getImg)에 alt가 없습니다. 콘텐츠 등록 시 대체 텍스트를 입력해야 합니다. (A-01의 특화 규칙 — 동일 이미지가 A-01과 함께 발화하나, 수정 주체가 코드가 아닌 BO 콘텐츠 관리자임을 구분해 안내하기 위한 의도적 중복)",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "img[src*=\"ckeditor\"]:not([alt]), img[src*=\"getImg\"]:not([alt])",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "대체 텍스트",
+      "kwcagItem": 1,
+      "autoFixable": false,
+      "auditRef": "11-1,13-1,15-1 CK Editor 이미지 alt 미제공"
+    },
+    {
+      "id": "A-40",
+      "title": "인라인 a 태그 카드 패턴 (수동 점검)",
+      "description": "a 태그가 div 등 블록 콘텐츠를 감싸는 카드 패턴에서 a가 display:block/flex가 아니면(기본 inline) 키보드 포커스 outline이 카드 외곽을 감싸지 못합니다. 이 display 값은 보통 외부 CSS 클래스(.card 등)에 정의되어 단일 파일 정적 분석으로는 판정할 수 없으므로, 카드형 링크의 a에 display:block/flex가 적용됐는지 해당 스타일시트에서 수동(또는 브라우저 포커스 테스트)으로 확인하세요.",
+      "severity": "warning",
+      "tier": "T3",
+      "pattern": "",
+      "patternType": "claude",
+      "fileTypes": ["html", "jsp", "vue", "ejs", "css"],
+      "category": "키보드 접근",
+      "kwcagItem": 11,
+      "autoFixable": false,
+      "auditRef": "14-11 미디어 갤러리 inline a 카드 outline 미표시. 정적 css-selector로는 외부 CSS 클래스의 display 값을 해석할 수 없어(스모크 테스트에서 .program-box/.gallery-media-box/.notice-card 전부 오탐) T3 수동 점검으로 전환."
+    },
+    {
+      "id": "A-41",
+      "title": "장식 이미지 aria-hidden 누락",
+      "description": "alt=\"\"인 장식 이미지에 aria-hidden=\"true\"가 없으면 일부 스크린리더가 불필요하게 처리할 수 있습니다. aria-hidden=\"true\"를 권장합니다.",
+      "severity": "info",
+      "tier": "T1",
+      "pattern": "img[alt='']:not([aria-hidden])",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "대체 텍스트",
+      "kwcagItem": 1,
+      "autoFixable": false,
+      "auditRef": "marquee/rotate 등 장식 이미지"
     }
   ]
 }

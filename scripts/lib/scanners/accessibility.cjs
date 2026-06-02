@@ -239,6 +239,42 @@ function checkA11(source, rule, filePath) {
 }
 
 /**
+ * Handle A-34: target="_blank" links missing new-window notice.
+ * A link is only a violation if it lacks a notice in its title / aria-label /
+ * visually-hidden (or .sr-only) text.
+ *
+ * @param {cheerio.CheerioAPI} $
+ * @param {string} source
+ * @param {object} rule
+ * @param {string} filePath
+ * @returns {Array}
+ */
+function checkA34($, source, rule, filePath) {
+  const violations = [];
+  const noticePattern = /새\s*창|new\s*window|opens?\s*in/i;
+  $('a[target="_blank"]').each((_, el) => {
+    const $el = $(el);
+    const notice = ($el.attr('title') || '') + (($el.attr('aria-label')) || '') +
+      ($el.find('.visually-hidden, .sr-only').text() || '');
+    if (noticePattern.test(notice)) return;
+    const outerHtml = $.html($el);
+    const code = outerHtml ? outerHtml.trim().slice(0, 200) : '<a target="_blank">';
+    const line = findLineNumber(source, code);
+    violations.push({
+      id: rule.id, title: rule.title, severity: rule.severity, tier: rule.tier,
+      file: filePath, line, column: 0, code,
+      suggestion: 'title="... (새 창 열림)" 또는 <span class="visually-hidden">새 창 열림</span> 추가',
+      autoFixable: rule.autoFixable || false, confidence: 'high', category: rule.patternType
+    });
+  });
+  return violations;
+}
+
+// 참고: A-40(인라인 a 카드 패턴)은 카드의 display 값이 외부 CSS 클래스에 정의되어
+// 단일 파일 정적 분석으로 판정 불가(스모크 테스트에서 .program-box/.gallery-media-box 등 전부 오탐).
+// 따라서 kwcag22.json에서 tier=T3(수동 점검)로 전환했고 전용 check 함수를 두지 않는다.
+
+/**
  * Main accessibility scanner.
  *
  * @param {string} filePath - Absolute path to JSP/HTML file
@@ -289,6 +325,8 @@ async function scanAccessibility(filePath, ruleSet) {
       violations.push(...checkA11(source, rule, filePath));
       continue;
     }
+
+    if (rule.id === 'A-34') { violations.push(...checkA34($, source, rule, filePath)); continue; }
 
     if (rule.patternType === 'css-selector') {
       let elements;

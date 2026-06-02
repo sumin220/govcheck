@@ -36,5 +36,18 @@
       </tr>
     </tbody>
   </table>
+
+  <%-- 신규 규칙 위반 샘플 (주석에 outline/color 리터럴 금지) --%>
+  <a href="https://example.com" target="_blank">외부 링크</a>
+  <style>a:focus { outline: none; }</style>
+  <div onclick="location.href='/detail'">클릭 가능한 div</div>
+  <select onchange="fnSearch()">
+    <option value="1">항목1</option>
+  </select>
+  <img src="/seoulgallery/common/ckeditor/getImg.do?uniqueId=123" width="1080">
+  <a href="/detail"><div class="card-box"><img src="/img.jpg" alt=""></div></a>
+  <img alt="" src="/images/decoration.svg">
+  <p style="color:#777777">저대비 회색 텍스트</p>
+  <div style="background-color:#ffffff">배경색은 오탐되면 안 됨</div>
 </body>
 </html>
