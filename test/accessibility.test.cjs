@@ -89,9 +89,25 @@ describe('scan_accessibility', () => {
     assert.ok(a09.some(v => /color:#777777/i.test(v.code)), 'A-09 should fire on color:#777777');
     assert.ok(!a09.some(v => /background-color/i.test(v.code)), 'A-09 must NOT fire on background-color');
   });
+  it('detects media without track (A-43)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    assert.ok(r.some(v => v.id === 'A-43'), 'A-43 should fire on video without track/muted');
+  });
+  it('detects th without scope (A-44)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    assert.ok(r.some(v => v.id === 'A-44'), 'A-44 should fire on th without scope');
+  });
+  it('detects user-scalable=no (A-45)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    assert.ok(r.some(v => v.id === 'A-45'), 'A-45 should fire on user-scalable=no');
+  });
+  it('detects select/textarea without label (A-46)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    assert.ok(r.some(v => v.id === 'A-46'), 'A-46 should fire');
+  });
   it('good file: no false positives for new/modified rules', async () => {
     const r = await scanAccessibility(path.join(fixturesDir, 'sample-good.jsp'), rules);
-    const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09'];
+    const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09','A-43','A-44','A-45','A-46'];
     const fp = r.filter(v => ids.includes(v.id));
     assert.strictEqual(fp.length, 0, `good file should be clean, got: ${JSON.stringify(fp.map(v=>v.id+':'+v.code))}`);
   });

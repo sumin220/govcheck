@@ -488,6 +488,62 @@
       "kwcagItem": 1,
       "autoFixable": false,
       "auditRef": "marquee/rotate 등 장식 이미지"
+    },
+    {
+      "id": "A-43",
+      "title": "자막/대체수단 없는 미디어",
+      "description": "video/audio에 track(자막/캡션) 자식이 없습니다. 음성/영상 콘텐츠에는 자막 등 대체 수단을 제공해야 합니다. 장식용 muted 배경영상은 제외합니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "video:not([muted]):not(:has(track)), audio:not(:has(track))",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "자막",
+      "kwcagItem": 2,
+      "autoFixable": false,
+      "auditRef": "자막 제공(KWCAG 2)"
+    },
+    {
+      "id": "A-44",
+      "title": "th scope/headers 연결 누락",
+      "description": "데이터 표의 제목 셀(th)에 scope(또는 id-headers 연결)가 없으면 셀-헤더 관계가 전달되지 않습니다. th에 scope=\"col|row\"를 지정하세요.",
+      "severity": "warning",
+      "tier": "T2",
+      "pattern": "th:not([scope]):not([id])",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "테이블",
+      "kwcagItem": 3,
+      "autoFixable": false,
+      "auditRef": "표의 구성(KWCAG 3) — A-04 보완"
+    },
+    {
+      "id": "A-45",
+      "title": "viewport 확대/축소 차단",
+      "description": "meta viewport에 user-scalable=no(또는 0)를 지정하면 저시력 사용자가 화면을 확대할 수 없습니다. 확대를 허용해야 합니다.",
+      "severity": "warning",
+      "tier": "T2",
+      "pattern": "user-scalable\\s*=\\s*['\"]?\\s*(no|0)",
+      "patternType": "regex",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "명도/확대",
+      "kwcagItem": 8,
+      "autoFixable": false,
+      "auditRef": "텍스트 확대(KWCAG 8)"
+    },
+    {
+      "id": "A-46",
+      "title": "select/textarea 레이블 미연결",
+      "description": "select, textarea에 연결된 label(for) 또는 aria-label/aria-labelledby가 없습니다. A-02(input)와 동일 요건을 select/textarea로 확장합니다.",
+      "severity": "critical",
+      "tier": "T1",
+      "pattern": "select, textarea",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "입력 서식",
+      "kwcagItem": 23,
+      "autoFixable": false,
+      "auditRef": "레이블과 네임/레이블 제공(KWCAG 23/29)"
     }
   ]
 }

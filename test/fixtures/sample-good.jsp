@@ -4,6 +4,7 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>좋은 예시 페이지</title>
 </head>
 <body>
@@ -49,6 +50,7 @@
 
     <a href="https://example.com" target="_blank" title="외부 사이트 (새 창 열림)">외부 링크 <span class="visually-hidden">새 창 열림</span></a>
     <button type="button" id="detailBtn" data-href="/detail">클릭 가능한 버튼</button>
+    <label for="category">분류 선택</label>
     <select id="category" name="category">
       <option value="1">항목1</option>
     </select>
@@ -57,6 +59,17 @@
     <a href="/detail" style="display:block"><div class="card-box"><img src="/img.jpg" alt="카드 이미지"></div></a>
     <img alt="" src="/images/decoration.svg" aria-hidden="true">
     <style>a:focus-visible { outline: 2px solid #000; }</style>
+    <label for="memo2">메모</label>
+    <textarea id="memo2" name="memo2"></textarea>
+    <video src="/media/intro.mp4" muted loop></video>
+    <table><caption>회의실 목록</caption><tr><th scope="col">이름</th><th scope="col">정원</th></tr></table>
+    <%-- A-42 회귀 가드: EL 동적 id는 반복 출력돼도 중복으로 오탐하면 안 됨 --%>
+    <ul>
+      <c:forEach var="row" items="${rows}" varStatus="st">
+        <li id="row-${st.index}"><c:out value="${row.name}"/></li>
+      </c:forEach>
+      <li id="row-${st.index}">정적 분석상 동일 리터럴이지만 EL이므로 A-42 미발화여야 함</li>
+    </ul>
   </main>
 </body>
 </html>

@@ -49,5 +49,9 @@
   <img alt="" src="/images/decoration.svg">
   <p style="color:#777777">저대비 회색 텍스트</p>
   <div style="background-color:#ffffff">배경색은 오탐되면 안 됨</div>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <video src="/media/intro.mp4"></video>
+  <table><caption>회의실</caption><tr><th>이름</th><th>정원</th></tr></table>
+  <textarea name="memo"></textarea>
 </body>
 </html>

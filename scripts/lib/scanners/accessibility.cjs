@@ -270,6 +270,39 @@ function checkA34($, source, rule, filePath) {
   return violations;
 }
 
+// 참고: 문서 내 중복 id(KWCAG 32 마크업 오류)는 webstandard 스캐너의 W-07이 이미 담당한다.
+// 접근성 도메인에 중복 규칙을 두지 않고(DRY) W-07을 단일 출처로 사용한다. W-07도 EL(${}) id를 skip하도록 보정됨.
+
+/**
+ * Handle A-46: select/textarea without an associated label.
+ * Accepts label[for], aria-label, or aria-labelledby as valid labeling.
+ *
+ * @param {cheerio.CheerioAPI} $
+ * @param {string} source
+ * @param {object} rule
+ * @param {string} filePath
+ * @returns {Array}
+ */
+function checkA46($, source, rule, filePath) {
+  const violations = [];
+  $('select, textarea').each((_, el) => {
+    const $el = $(el);
+    const id = $el.attr('id');
+    let ok = false;
+    if (id && $('label[for="' + id + '"]').length > 0) ok = true;
+    if ($el.attr('aria-label') || $el.attr('aria-labelledby')) ok = true;
+    if (ok) return;
+    const code = ($.html($el) || '<'+(el.tagName||el.name)+'>').trim().slice(0, 200);
+    violations.push({
+      id: rule.id, title: rule.title, severity: rule.severity, tier: rule.tier,
+      file: filePath, line: findLineNumber(source, code), column: 0, code,
+      suggestion: 'label[for] 연결 또는 aria-label/aria-labelledby 제공',
+      autoFixable: rule.autoFixable || false, confidence: 'high', category: rule.patternType
+    });
+  });
+  return violations;
+}
+
 // 참고: A-40(인라인 a 카드 패턴)은 카드의 display 값이 외부 CSS 클래스에 정의되어
 // 단일 파일 정적 분석으로 판정 불가(스모크 테스트에서 .program-box/.gallery-media-box 등 전부 오탐).
 // 따라서 kwcag22.json에서 tier=T3(수동 점검)로 전환했고 전용 check 함수를 두지 않는다.
@@ -327,6 +360,7 @@ async function scanAccessibility(filePath, ruleSet) {
     }
 
     if (rule.id === 'A-34') { violations.push(...checkA34($, source, rule, filePath)); continue; }
+    if (rule.id === 'A-46') { violations.push(...checkA46($, source, rule, filePath)); continue; }
 
     if (rule.patternType === 'css-selector') {
       let elements;
