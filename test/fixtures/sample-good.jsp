@@ -70,6 +70,9 @@
       </c:forEach>
       <li id="row-${st.index}">정적 분석상 동일 리터럴이지만 EL이므로 A-42 미발화여야 함</li>
     </ul>
+    <button type="button" id="navMenuBtn" aria-label="장소 메뉴 열기">메뉴</button>
+    <p>공연 &#39;유월의 설렘&#39; 안내</p>
+    <%-- 주석 마스킹 회귀 가드: 주석 내부의 aria-label="버튼" 과 &amp;#39; 는 미발화여야 함 --%>
   </main>
 </body>
 </html>

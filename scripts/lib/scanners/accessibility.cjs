@@ -239,9 +239,12 @@ function checkA11(source, rule, filePath) {
 }
 
 /**
- * Handle A-34: target="_blank" links missing new-window notice.
- * A link is only a violation if it lacks a notice in its title / aria-label /
- * visually-hidden (or .sr-only) text.
+ * Handle A-34: elements that open a new window missing the new-window notice.
+ * Covers both a[target="_blank"] links and any element whose onclick calls
+ * window.open (2차 심사 2-33 VR bottom_logo 사각지대 보완).
+ * An element is only a violation if it lacks a notice in its title /
+ * aria-label / visually-hidden (or .sr-only) text.
+ * Elements matching both selectors are deduped via a processed-element Set.
  *
  * @param {cheerio.CheerioAPI} $
  * @param {string} source
@@ -252,21 +255,41 @@ function checkA11(source, rule, filePath) {
 function checkA34($, source, rule, filePath) {
   const violations = [];
   const noticePattern = /새\s*창|new\s*window|opens?\s*in/i;
-  $('a[target="_blank"]').each((_, el) => {
-    const $el = $(el);
-    const notice = ($el.attr('title') || '') + (($el.attr('aria-label')) || '') +
-      ($el.find('.visually-hidden, .sr-only').text() || '');
-    if (noticePattern.test(notice)) return;
-    const outerHtml = $.html($el);
-    const code = outerHtml ? outerHtml.trim().slice(0, 200) : '<a target="_blank">';
-    const line = findLineNumber(source, code);
-    violations.push({
-      id: rule.id, title: rule.title, severity: rule.severity, tier: rule.tier,
-      file: filePath, line, column: 0, code,
-      suggestion: 'title="... (새 창 열림)" 또는 <span class="visually-hidden">새 창 열림</span> 추가',
-      autoFixable: rule.autoFixable || false, confidence: 'high', category: rule.patternType
+  const processedElements = new Set();
+
+  const hasNotice = ($el) =>
+    noticePattern.test(
+      ($el.attr('title') || '') + ($el.attr('aria-label') || '') +
+      ($el.find('.visually-hidden, .sr-only').text() || '')
+    );
+
+  // onclick 값이 실제 window.open(...) 호출 형태인지 검증 — 문자열 리터럴('window.open is disabled')
+  // 안에만 등장하는 경우 등 부분 문자열 오탐 차단. 단순 휴리스틱이므로 onclick 경로는 confidence를 낮춤.
+  const isWindowOpenCall = ($el) =>
+    /(?:^|[^\w'"])window\s*\.\s*open\s*\(/.test($el.attr('onclick') || '');
+
+  const collect = (selector, fallbackCode, confidence, extraFilter) => {
+    $(selector).each((_, el) => {
+      if (processedElements.has(el)) return;
+      processedElements.add(el);
+      const $el = $(el);
+      if (extraFilter && !extraFilter($el)) return;
+      if (hasNotice($el)) return;
+      const outerHtml = $.html($el);
+      const code = outerHtml ? outerHtml.trim().slice(0, 200) : fallbackCode;
+      const line = findLineNumber(source, code);
+      violations.push({
+        id: rule.id, title: rule.title, severity: rule.severity, tier: rule.tier,
+        file: filePath, line, column: 0, code,
+        suggestion: 'title="... (새 창 열림)" 또는 <span class="visually-hidden">새 창 열림</span> 추가',
+        autoFixable: rule.autoFixable || false, confidence, category: rule.patternType
+      });
     });
-  });
+  };
+
+  collect('a[target="_blank"]', '<a target="_blank">', 'high');
+  collect('[onclick*="window.open"]', '<element onclick="window.open(...)">', 'medium', isWindowOpenCall);
+
   return violations;
 }
 
@@ -317,6 +340,12 @@ function checkA46($, source, rule, filePath) {
 async function scanAccessibility(filePath, ruleSet) {
   const source = fs.readFileSync(filePath, 'utf-8');
   const { html, elExpressions } = preprocessJsp(source);
+
+  // regex 규칙용 마스킹 사본: JSP(<%-- --%>)·HTML(<!-- -->) 주석 내부를 공백으로 치환.
+  // 오프셋·라인 번호가 그대로 보존되며, 레거시 프로젝트의 주석 처리된 옛 마크업
+  // (엔티티·aria-label 등)이 regex 규칙에 오탐되는 것을 방지한다.
+  const maskedSource = source.replace(/<%--[\s\S]*?--%>|<!--[\s\S]*?-->/g,
+    (m) => m.replace(/[^\n]/g, ' '));
   const $ = cheerio.load(html, { xmlMode: false });
 
   const violations = [];
@@ -407,9 +436,9 @@ async function scanAccessibility(filePath, ruleSet) {
       }
 
       let match;
-      while ((match = regex.exec(source)) !== null) {
+      while ((match = regex.exec(maskedSource)) !== null) {
         const code = match[0].slice(0, 200);
-        const line = source.slice(0, match.index).split('\n').length;
+        const line = maskedSource.slice(0, match.index).split('\n').length;
 
         violations.push({
           id: rule.id,

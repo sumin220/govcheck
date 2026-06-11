@@ -53,5 +53,11 @@
   <video src="/media/intro.mp4"></video>
   <table><caption>회의실</caption><tr><th>이름</th><th>정원</th></tr></table>
   <textarea name="memo"></textarea>
+  <div onclick="window.open('/seoulgallery/resource/seoul_gallery/index.html', '_blank')" role="link" tabindex="0">VR 보기</div>
+  <div onclick="window.open('/popup.html', '_blank')" role="link" tabindex="0" title="팝업 안내 (새 창 열림)">안내 보기</div>
+  <a href="/dual" target="_blank" onclick="window.open('/dual', '_blank')">양쪽 패턴 — 중복 보고되면 안 됨(1건만)</a>
+  <div onclick="alert('window.open is disabled here')" role="button" tabindex="0">문자열 리터럴 — 호출 아님, 미발화</div>
+  <button type="button" aria-label="버튼">메뉴</button>
+  <img src="/poster.jpg" alt="공연 &amp;#39;유월의 설렘&amp;#39; 포스터">
 </body>
 </html>

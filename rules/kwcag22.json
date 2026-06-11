@@ -1,9 +1,9 @@
 {
-  "version": "2026.2",
+  "version": "2026.3",
   "standard": "KWCAG 2.2 (한국형 웹 콘텐츠 접근성 지침 2.2)",
-  "lastUpdated": "2026-06-02",
+  "lastUpdated": "2026-06-11",
   "source": "https://www.wa.or.kr/kwcag22",
-  "auditSource": "서울갤러리 KWCAG 2.2 1차 심사 (2026-05-15, WebWatch) — A-34/36/37/38/41 신규, A-25/A-09 보정, A-40 수동점검",
+  "auditSource": "서울갤러리 KWCAG 2.2 1차 심사 (2026-05-15, WebWatch) — A-34/36/37/38/41 신규, A-25/A-09 보정, A-40 수동점검 + 2차 심사(2026-06-10) A-34확장/A-47/A-48",
   "rules": [
     {
       "id": "A-01",
@@ -408,16 +408,16 @@
     {
       "id": "A-34",
       "title": "새 창 열림 안내 누락",
-      "description": "target=\"_blank\"로 새 창을 여는 링크에 새 창 열림 안내(title 속성, aria-label, visually-hidden 텍스트)가 없습니다.",
+      "description": "새 창을 여는 요소(target=\"_blank\" 링크, JS window.open 포함)에 새 창 열림 안내(title 속성, aria-label, visually-hidden 텍스트)가 없습니다.",
       "severity": "critical",
       "tier": "T1",
-      "pattern": "a[target='_blank']",
+      "pattern": "a[target='_blank'], [onclick*='window.open']",
       "patternType": "css-selector",
       "fileTypes": ["html", "jsp", "vue", "ejs"],
       "category": "사용자 요구",
       "kwcagItem": 26,
       "autoFixable": false,
-      "auditRef": "3-26 새 창 알림 미제공"
+      "auditRef": "3-26 새 창 알림 미제공, 2차 2-33 VR bottom_logo"
     },
     {
       "id": "A-36",
@@ -544,6 +544,34 @@
       "kwcagItem": 23,
       "autoFixable": false,
       "auditRef": "레이블과 네임/레이블 제공(KWCAG 23/29)"
+    },
+    {
+      "id": "A-47",
+      "title": "무의미한 generic aria-label",
+      "description": "aria-label이 '버튼', '링크', '이미지', 'button', 'icon' 등 요소 유형만 반복하는 무의미한 값이면 스크린리더 사용자가 용도를 알 수 없습니다. 구체적인 기능/목적을 라벨로 제공하세요.",
+      "severity": "warning",
+      "tier": "T2",
+      "pattern": "(?<![\\w-])aria-label\\s*=\\s*[\"']\\s*(버튼|링크|클릭|이미지|아이콘|컨트롤|메뉴|button|link|click|icon|image|control|menu)\\s*[\"']",
+      "patternType": "regex",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "ARIA",
+      "kwcagItem": 33,
+      "autoFixable": false,
+      "auditRef": "2차 2-33/3-33 VR 컨트롤 generic 라벨"
+    },
+    {
+      "id": "A-48",
+      "title": "HTML 엔티티 이중 이스케이프 흔적",
+      "description": "소스에 &amp;#39; &amp;lt; 같은 이중 이스케이프된 엔티티가 있으면 화면에 &#39; &lt; 등이 리터럴로 노출되어 스크린리더가 엔티티 문자를 그대로 낭독합니다. 저장 시 이스케이프된 값을 출력 시 디코딩 없이 재이스케이프한 버그 신호입니다.",
+      "severity": "warning",
+      "tier": "T2",
+      "pattern": "&amp;(#x?[0-9a-fA-F]+|lt|gt|quot|apos|nbsp|amp);",
+      "patternType": "regex",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "대체 텍스트",
+      "kwcagItem": 1,
+      "autoFixable": false,
+      "auditRef": "2차 1-1 프로그램 alt &#39; 리터럴 노출 (소스 내 정적 흔적 한정 — DB값 런타임 재이스케이프는 미탐, 코드리뷰/A-21로 보완)"
     }
   ]
 }

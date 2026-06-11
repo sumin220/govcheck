@@ -105,9 +105,36 @@ describe('scan_accessibility', () => {
     const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
     assert.ok(r.some(v => v.id === 'A-46'), 'A-46 should fire');
   });
+  it('A-34 extension: onclick window.open without notice fires, with notice does not', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    const a34 = r.filter(v => v.id === 'A-34');
+    assert.strictEqual(a34.length, 3, 'a[target=_blank] 1건 + onclick div 1건 + 양쪽 패턴 앵커 1건 = 정확히 3건');
+    assert.ok(a34.some(v => v.code.includes('window.open')), 'onclick 패턴 발화');
+    assert.ok(!a34.some(v => v.code.includes('팝업 안내')), '안내 있는 onclick은 미발화');
+    // dedupe 가드: target=_blank + onclick 동시 보유 요소가 2건으로 중복 보고되지 않음
+    const dualReports = a34.filter(v => v.code.includes('/dual'));
+    assert.strictEqual(dualReports.length, 1, '양쪽 셀렉터 매칭 요소는 정확히 1건만 보고');
+    // 호출 형태 가드: 문자열 리터럴 안의 window.open은 미발화
+    assert.ok(!a34.some(v => v.code.includes('disabled here')), '문자열 리터럴 window.open은 미발화');
+    // onclick 경로는 휴리스틱이므로 confidence medium, a[target=_blank]는 high
+    assert.ok(a34.filter(v => v.code.includes('VR 보기')).every(v => v.confidence === 'medium'));
+  });
+  it('comment masking: commented-out violations do not fire (A-47/A-48)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-good.jsp'), rules);
+    // good fixture의 JSP 주석 안에 aria-label="버튼"과 &amp;#39;가 있으나 마스킹으로 미발화
+    assert.ok(!r.some(v => v.id === 'A-47' || v.id === 'A-48'), '주석 내부 패턴은 마스킹되어 미발화');
+  });
+  it('detects generic aria-label (A-47)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    assert.ok(r.some(v => v.id === 'A-47'), 'A-47 should fire on aria-label="버튼"');
+  });
+  it('detects double-escaped entities (A-48)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    assert.ok(r.some(v => v.id === 'A-48'), 'A-48 should fire on &amp;#39;');
+  });
   it('good file: no false positives for new/modified rules', async () => {
     const r = await scanAccessibility(path.join(fixturesDir, 'sample-good.jsp'), rules);
-    const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09','A-43','A-44','A-45','A-46'];
+    const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09','A-43','A-44','A-45','A-46','A-47','A-48'];
     const fp = r.filter(v => ids.includes(v.id));
     assert.strictEqual(fp.length, 0, `good file should be clean, got: ${JSON.stringify(fp.map(v=>v.id+':'+v.code))}`);
   });
