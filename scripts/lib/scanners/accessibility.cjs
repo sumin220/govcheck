@@ -326,6 +326,96 @@ function checkA46($, source, rule, filePath) {
   return violations;
 }
 
+// A-49 휴리스틱 상수: 공백/구두점만, 이미지 파일명 확장자, 요소 유형만 반복하는 generic 단어.
+// '로고'/'logo'는 심볼 전용 로고 alt에서 정당할 수 있어 의도적으로 제외(오탐 방지).
+const A49_PUNCT_ONLY = /^[-_.·*~#|+\s]+$/;
+const A49_FILENAME = /\.(jpe?g|png|gif|svg|webp|bmp|ico|tiff?)$/i;
+const A49_GENERIC_WORDS = new Set([
+  '이미지', '사진', '그림', '배너', '썸네일', '아이콘',
+  'image', 'photo', 'picture', 'img', 'banner', 'thumbnail', 'icon'
+]);
+
+/**
+ * Collect post-preprocessing residues of alt values that contained scriptlets.
+ * preprocessJsp는 cheerio 도달 전에 <%...%>를 삭제하므로, DOM에서 보이는 alt 값만으로는
+ * 스크립틀릿 유래 여부를 알 수 없다(예: alt="<%=fileNm%>.jpg" → DOM ".jpg" → 파일명 오탐).
+ * 원본 source에서 스크립틀릿 포함 alt의 "삭제 후 잔여값"을 미리 모아 skip 목록으로 쓴다.
+ *
+ * @param {string} source - original (pre-preprocessing) source
+ * @returns {Set<string>}
+ */
+function collectA49ScriptletResidues(source) {
+  const residues = new Set();
+  if (!source.includes('<%')) return residues;
+  const attrRe = /alt\s*=\s*("([^"]*)"|'([^']*)')/gi;
+  let m;
+  while ((m = attrRe.exec(source)) !== null) {
+    const raw = m[2] !== undefined ? m[2] : m[3];
+    if (raw && raw.includes('<%')) {
+      residues.add(raw.replace(/<%[\s\S]*?%>/g, ''));
+    }
+  }
+  return residues;
+}
+
+/**
+ * Classify an alt value against the A-49 sub-patterns.
+ * Returns a reason string when the value is an inadequate alt, or null when acceptable.
+ *
+ * @param {string} value - alt attribute value as seen in the (preprocessed) DOM
+ * @param {Set<string>} scriptletResidues - values originating from scriptlet-containing alt (skip)
+ * @returns {string|null}
+ */
+function classifyA49AltValue(value, scriptletResidues) {
+  // EL/스크립틀릿 skip (최우선): 런타임 값은 정적 판정 불가 (W-07 EL 교훈).
+  // 스크립틀릿은 preprocessJsp가 이미 삭제했으므로 원본 기반 residue 목록으로 판정한다.
+  if (value.includes('${')) return null;
+  if (scriptletResidues && scriptletResidues.has(value)) return null;
+  // 빈 alt는 정당한 장식 선언 → A-41 영역
+  if (value === '') return null;
+  const trimmed = value.trim();
+  if (trimmed === '' || A49_PUNCT_ONLY.test(trimmed)) {
+    return '공백/구두점만으로는 의미 전달 불가 — 장식이면 alt=""를 사용';
+  }
+  if (A49_FILENAME.test(trimmed)) {
+    return '파일명은 대체 텍스트가 아님 — 이미지 내용을 설명';
+  }
+  // NFC 정규화: macOS 편집 JSP의 NFD 한글('이미지' 분해형)도 동일 판정
+  if (A49_GENERIC_WORDS.has(trimmed.normalize('NFC').toLowerCase())) {
+    return '요소 유형만 반복하는 무의미한 값';
+  }
+  return null;
+}
+
+/**
+ * Handle A-49: inadequate alt text on images (alt exists but is meaningless).
+ * A-01(누락)·A-41(장식)·A-48(이중 이스케이프)과 달리 "있지만 무의미한" alt를 잡는다.
+ * Sub-patterns: (a) whitespace/punctuation-only, (b) image filename, (c) generic word.
+ *
+ * @param {cheerio.CheerioAPI} $
+ * @param {string} source
+ * @param {object} rule
+ * @param {string} filePath
+ * @returns {Array}
+ */
+function checkA49($, source, rule, filePath) {
+  const violations = [];
+  const scriptletResidues = collectA49ScriptletResidues(source);
+  $('img[alt]').each((_, el) => {
+    const $el = $(el);
+    const reason = classifyA49AltValue($el.attr('alt') || '', scriptletResidues);
+    if (reason === null) return;
+    const code = ($.html($el) || '<img>').trim().slice(0, 200);
+    violations.push({
+      id: rule.id, title: rule.title, severity: rule.severity, tier: rule.tier,
+      file: filePath, line: findLineNumber(source, code), column: 0, code,
+      suggestion: reason,
+      autoFixable: rule.autoFixable || false, confidence: 'high', category: rule.patternType
+    });
+  });
+  return violations;
+}
+
 // 참고: A-40(인라인 a 카드 패턴)은 카드의 display 값이 외부 CSS 클래스에 정의되어
 // 단일 파일 정적 분석으로 판정 불가(스모크 테스트에서 .program-box/.gallery-media-box 등 전부 오탐).
 // 따라서 kwcag22.json에서 tier=T3(수동 점검)로 전환했고 전용 check 함수를 두지 않는다.
@@ -390,6 +480,7 @@ async function scanAccessibility(filePath, ruleSet) {
 
     if (rule.id === 'A-34') { violations.push(...checkA34($, source, rule, filePath)); continue; }
     if (rule.id === 'A-46') { violations.push(...checkA46($, source, rule, filePath)); continue; }
+    if (rule.id === 'A-49') { violations.push(...checkA49($, source, rule, filePath)); continue; }
 
     if (rule.patternType === 'css-selector') {
       let elements;

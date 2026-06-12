@@ -59,5 +59,8 @@
   <div onclick="alert('window.open is disabled here')" role="button" tabindex="0">문자열 리터럴 — 호출 아님, 미발화</div>
   <button type="button" aria-label="버튼">메뉴</button>
   <img src="/poster.jpg" alt="공연 &amp;#39;유월의 설렘&amp;#39; 포스터">
+  <img src="/a.jpg" alt="IMG_1234.jpg">
+  <img src="/b.jpg" alt="이미지">
+  <img src="/c.jpg" alt=" ">
 </body>
 </html>

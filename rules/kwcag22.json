@@ -1,7 +1,7 @@
 {
-  "version": "2026.3",
+  "version": "2026.4",
   "standard": "KWCAG 2.2 (한국형 웹 콘텐츠 접근성 지침 2.2)",
-  "lastUpdated": "2026-06-11",
+  "lastUpdated": "2026-06-12",
   "source": "https://www.wa.or.kr/kwcag22",
   "auditSource": "서울갤러리 KWCAG 2.2 1차 심사 (2026-05-15, WebWatch) — A-34/36/37/38/41 신규, A-25/A-09 보정, A-40 수동점검 + 2차 심사(2026-06-10) A-34확장/A-47/A-48",
   "rules": [
@@ -572,6 +572,20 @@
       "kwcagItem": 1,
       "autoFixable": false,
       "auditRef": "2차 1-1 프로그램 alt &#39; 리터럴 노출 (소스 내 정적 흔적 한정 — DB값 런타임 재이스케이프는 미탐, 코드리뷰/A-21로 보완)"
+    },
+    {
+      "id": "A-49",
+      "title": "부적절한 대체 텍스트(파일명/무의미 값)",
+      "description": "alt가 존재하지만 공백/구두점만이거나, 이미지 파일명이거나, '이미지'·'photo' 등 요소 유형만 반복하는 generic 단어면 스크린리더 사용자에게 의미를 전달하지 못합니다. A-01(누락)·A-41(장식)·A-48(이중 이스케이프)과 달리 '있지만 무의미한' alt를 잡습니다. EL(${})·스크립틀릿 값은 정적 판정 불가로 skip하며, '로고'/'logo'는 심볼 전용 로고에서 정당할 수 있어 제외합니다. (custom check: checkA49 — pattern은 디스패치 문서화용)",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "img[alt]",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "대체 텍스트",
+      "kwcagItem": 1,
+      "autoFixable": false,
+      "auditRef": "2차 1-1/13-1 alt 품질 지적 계열 — 명백한 불량 alt 정적 휴리스틱"
     }
   ]
 }

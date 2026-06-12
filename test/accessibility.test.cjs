@@ -132,9 +132,38 @@ describe('scan_accessibility', () => {
     const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
     assert.ok(r.some(v => v.id === 'A-48'), 'A-48 should fire on &amp;#39;');
   });
+  it('detects inadequate alt text — exactly 3, one per sub-pattern (A-49)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-bad.jsp'), rules);
+    const a49 = r.filter(v => v.id === 'A-49');
+    assert.strictEqual(a49.length, 3, '파일명 + generic 단어 + 공백 = 정확히 3건');
+    const filename = a49.find(v => v.code.includes('IMG_1234.jpg'));
+    assert.ok(filename, '(b) 파일명 alt 발화');
+    assert.ok(/파일명/.test(filename.suggestion), '(b) reason은 파일명 안내');
+    const generic = a49.find(v => v.code.includes('/b.jpg'));
+    assert.ok(generic, '(c) generic 단어 alt 발화');
+    assert.ok(/무의미한 값/.test(generic.suggestion), '(c) reason은 무의미한 값 안내');
+    const blank = a49.find(v => v.code.includes('/c.jpg'));
+    assert.ok(blank, '(a) 공백 alt 발화');
+    assert.ok(/공백\/구두점/.test(blank.suggestion), '(a) reason은 공백/구두점 안내');
+  });
+  it('A-49 EL skip: ${} alt in good file does not fire', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-good.jsp'), rules);
+    const a49 = r.filter(v => v.id === 'A-49');
+    assert.strictEqual(a49.length, 0, `good file A-49는 0건이어야 함: ${JSON.stringify(a49.map(v=>v.code))}`);
+    // EL skip 전용 가드: ${item.imgNm} img가 발화 목록에 없어야 함
+    assert.ok(!r.some(v => v.id === 'A-49' && v.code.includes('${item.imgNm}')), 'EL alt는 정적 판정 불가 — skip');
+  });
+  it('A-49 scriptlet skip: <%= %> alt residues do not fire, real literals still do', async () => {
+    // preprocessJsp가 스크립틀릿을 삭제한 잔여값(".jpg", " 사진", "이미지 ")은 미발화,
+    // 같은 파일의 진짜 리터럴 파일명(hero.jpg)은 발화해야 함 (과잉 skip 방지 대조군)
+    const r = await scanAccessibility(path.join(fixturesDir,'sample-a49-scriptlet.jsp'), rules);
+    const a49 = r.filter(v => v.id === 'A-49');
+    assert.strictEqual(a49.length, 1, `스크립틀릿 잔여값 3건 skip + 리터럴 1건 발화: ${JSON.stringify(a49.map(v=>v.code))}`);
+    assert.ok(a49[0].code.includes('hero.jpg'), '리터럴 파일명 alt는 정상 발화');
+  });
   it('good file: no false positives for new/modified rules', async () => {
     const r = await scanAccessibility(path.join(fixturesDir, 'sample-good.jsp'), rules);
-    const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09','A-43','A-44','A-45','A-46','A-47','A-48'];
+    const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09','A-43','A-44','A-45','A-46','A-47','A-48','A-49'];
     const fp = r.filter(v => ids.includes(v.id));
     assert.strictEqual(fp.length, 0, `good file should be clean, got: ${JSON.stringify(fp.map(v=>v.id+':'+v.code))}`);
   });

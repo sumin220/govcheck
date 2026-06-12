@@ -73,6 +73,9 @@
     <button type="button" id="navMenuBtn" aria-label="장소 메뉴 열기">메뉴</button>
     <p>공연 &#39;유월의 설렘&#39; 안내</p>
     <%-- 주석 마스킹 회귀 가드: 주석 내부의 aria-label="버튼" 과 &amp;#39; 는 미발화여야 함 --%>
+    <%-- A-49 함정 케이스: 점+숫자는 확장자가 아니므로 미발화, EL alt는 정적 판정 불가로 skip --%>
+    <img src="/d.jpg" alt="2026.06.27 공연 일정 안내 포스터">
+    <img src="/img/${item.imgFile}" alt="${item.imgNm}">
   </main>
 </body>
 </html>
