@@ -1,0 +1,53 @@
+{
+  "version": "2026.1",
+  "standard": "동적 키보드 접근성 (Playwright 런타임 검사)",
+  "lastUpdated": "2026-06-17",
+  "source": "KWCAG 2.2 항목 10(키보드 사용 보장)·11(초점 이동과 표시)",
+  "auditSource": "서울갤러리 갤러리소개 img-box(클릭/호버 동작이나 Tab 불가) 사례 — 정적 분석(A-36)으로 미탐지, 런타임 검사 필요",
+  "rules": [
+    {
+      "id": "K-01",
+      "title": "클릭 가능하지만 키보드 접근 불가",
+      "description": "cursor:pointer·onclick·인터랙티브 role을 가져 클릭 가능해 보이지만, 페이지 로드(JS 실행) 후에도 키보드 포커스가 불가능(native focusable 아님 + tabindex 없음)하고 Tab으로 도달하지 못하는 요소. <a>/<button>으로 교체하거나 tabindex+role+키보드 핸들러를 추가하세요. (A-36의 onclick 속성 한정 한계를 런타임으로 보완 — 외부 JS addEventListener·CSS cursor도 탐지)",
+      "severity": "critical",
+      "tier": "DYN",
+      "patternType": "dynamic-browser",
+      "category": "키보드 접근",
+      "kwcagItem": 10,
+      "autoFixable": false
+    },
+    {
+      "id": "K-02",
+      "title": "양수 tabindex (포커스 순서 깨짐)",
+      "description": "런타임 DOM에서 tabindex 값이 1 이상인 요소. 자연스러운 포커스 순서를 깨뜨리므로 0 또는 -1만 사용해야 합니다. (정적 A-06의 런타임 확증)",
+      "severity": "warning",
+      "tier": "DYN",
+      "patternType": "dynamic-browser",
+      "category": "키보드 접근",
+      "kwcagItem": 11,
+      "autoFixable": false
+    },
+    {
+      "id": "K-03",
+      "title": "Tab 포커스 시각 표시 없음",
+      "description": "Tab으로 포커스를 받는 요소에 :focus-visible 상태의 시각적 표시(outline·box-shadow 등)가 없는 경우. 키보드 사용자가 현재 위치를 인지할 수 없습니다. outline:none 제거 또는 대체 포커스 스타일을 제공하세요. (정적 A-25의 런타임 확증)",
+      "severity": "critical",
+      "tier": "DYN",
+      "patternType": "dynamic-browser",
+      "category": "키보드 포커스",
+      "kwcagItem": 11,
+      "autoFixable": false
+    },
+    {
+      "id": "K-04",
+      "title": "키보드 트랩 (Tab 진행 불가)",
+      "description": "Tab 키가 특정 요소에서 더 이상 진행되지 않거나 일부 영역에 갇혀 빠져나올 수 없는 경우. 모달·위젯 등에 Esc 또는 순환 탈출 경로를 제공해야 합니다.",
+      "severity": "critical",
+      "tier": "DYN",
+      "patternType": "dynamic-browser",
+      "category": "키보드 접근",
+      "kwcagItem": 10,
+      "autoFixable": false
+    }
+  ]
+}

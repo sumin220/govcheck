@@ -14,6 +14,8 @@ const { scanPrivacy } = require('./lib/scanners/privacy.cjs');
 const { scanEgovCompat } = require('./lib/scanners/egov-compat.cjs');
 const { scanQuality } = require('./lib/scanners/quality.cjs');
 const { scanWebvuln } = require('./lib/scanners/webvuln.cjs');
+const { runKeyboardAudit } = require('./lib/dynamic/keyboard-audit.cjs');
+const fs = require('node:fs');
 const path = require('node:path');
 
 // Resolve the types module from the SDK's CJS dist
@@ -402,6 +404,22 @@ const TOOL_DEFINITIONS = [
       },
       required: ['projectRoot']
     }
+  },
+  {
+    name: 'audit_keyboard',
+    description: '동적 키보드 접근성 감사 (Playwright). 살아있는 URL을 크롤하며 실제 브라우저로 Tab을 순회해, 정적 분석으로는 못 잡는 런타임 키보드 문제를 검사한다: 클릭/호버되는데 Tab 불가(K-01), 양수 tabindex(K-02), 포커스 시각표시 없음(K-03), 키보드 트랩(K-04). 소스 파일이 아니라 실행 중인 사이트를 검사하므로 baseUrl(또는 urls)이 필요하며 playwright 설치가 필요하다.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        baseUrl: { type: 'string', description: '검사 시작 URL (예: https://site.go.kr/index.do). 같은 출처 링크를 크롤한다.' },
+        urls: { type: 'array', items: { type: 'string' }, description: '크롤 대신 명시적으로 검사할 URL 목록 (선택)' },
+        maxPages: { type: 'number', description: '크롤 최대 페이지 수 (기본 20)' },
+        maxTabs: { type: 'number', description: '페이지당 Tab 최대 횟수 (기본 200)' },
+        maxResults: { type: 'number', description: '반환 violation 최대 수 (기본 100)' },
+        sameOriginOnly: { type: 'boolean', description: '같은 출처만 크롤 (기본 true)' }
+      },
+      required: []
+    }
   }
 ];
 
@@ -419,6 +437,55 @@ const TOOL_TO_DOMAIN = {
 };
 
 /**
+ * Load the dynamic keyboard rules (rules/keyboard-dynamic.json).
+ */
+function loadKeyboardRules() {
+  try {
+    const p = path.join(__dirname, '..', 'rules', 'keyboard-dynamic.json');
+    return JSON.parse(fs.readFileSync(p, 'utf-8')).rules || [];
+  } catch (e) { return []; }
+}
+
+/**
+ * Handle the dynamic keyboard accessibility audit (Playwright).
+ *
+ * @param {object} args - { baseUrl, urls, maxPages, maxTabs, maxResults, sameOriginOnly }
+ * @returns {Promise<object>} Audit result
+ */
+async function handleAuditKeyboard(args) {
+  const startTime = Date.now();
+  const maxResults = args.maxResults || 100;
+  try {
+    const result = await runKeyboardAudit({
+      baseUrl: args.baseUrl,
+      urls: args.urls,
+      rules: loadKeyboardRules(),
+      maxPages: args.maxPages || 20,
+      maxTabs: args.maxTabs || 200,
+      sameOriginOnly: args.sameOriginOnly !== false
+    });
+    const total = result.violations.length;
+    return {
+      tool: 'audit_keyboard',
+      baseUrl: result.baseUrl,
+      pagesScanned: result.pagesScanned,
+      elapsed: Date.now() - startTime,
+      perPage: result.perPage,
+      violations: result.violations.slice(0, maxResults),
+      truncated: total > maxResults,
+      totalCount: total
+    };
+  } catch (e) {
+    return {
+      tool: 'audit_keyboard',
+      error: (e && e.code) || 'AUDIT_ERROR',
+      message: String(e && e.message || e),
+      elapsed: Date.now() - startTime
+    };
+  }
+}
+
+/**
  * Handle an MCP tool call by dispatching to the appropriate handler.
  *
  * @param {string} toolName - The MCP tool name
@@ -430,6 +497,14 @@ async function handleToolCall(toolName, args) {
     const result = await handleScanAll(args);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+    };
+  }
+
+  if (toolName === 'audit_keyboard') {
+    const result = await handleAuditKeyboard(args);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      isError: !!result.error
     };
   }
 
@@ -480,4 +555,4 @@ if (require.main === module) {
 }
 
 // Export handlers for testing
-module.exports = { handleScanAll, handleScanDomain, handleScanDiff, handleToolCall, DOMAIN_SCANNERS, TOOL_DEFINITIONS };
+module.exports = { handleScanAll, handleScanDomain, handleScanDiff, handleAuditKeyboard, handleToolCall, DOMAIN_SCANNERS, TOOL_DEFINITIONS };

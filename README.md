@@ -80,6 +80,30 @@ KWCAG 2.2 표준 33개 검사항목을 46개 정적 규칙으로 점검합니다
 
 > **설계 원칙:** 모든 신규 규칙은 2개 독립 분석(coverage-maximizer vs false-positive skeptic) + 실프로젝트 오탐 실측을 거쳐, **단일 파일 정적 분석으로 신뢰성 있게 탐지되는 것만** 채택했습니다. 외부 CSS·크로스파일(JSP include/Tiles)·런타임 상태·계산값(명도 대비)에 의존하는 항목은 T3(수동 점검)로 분류하거나 제외합니다. 중복 id(KWCAG 32)는 웹표준 스캐너 W-07이 담당하여 도메인 간 중복을 피합니다. regex 계열 규칙은 JSP/HTML **주석 내부를 마스킹**(오프셋 보존)하고 스캔하여 주석 처리된 옛 마크업 오탐을 방지합니다.
 
+## 동적 키보드 접근성 감사 (Playwright)
+
+정적 분석으로는 **원리적으로 못 잡는** 런타임 키보드 문제 — 예: `cursor:pointer`/외부 JS `addEventListener`로만 동작해 클릭은 되지만 **Tab으로 도달 못 하는 요소**(KWCAG 10) — 를 실제 브라우저로 **살아있는 사이트를 크롤하며** 검사합니다. 정적 규칙 A-36(`onclick` 속성 한정)·A-25(outline 제거)의 런타임 보완입니다.
+
+```bash
+# 설치 (playwright는 optionalDependency)
+npm install playwright && npx playwright install chromium
+
+# 실행 — baseUrl에서 같은 출처 링크를 크롤하며 페이지마다 Tab 순회
+node scripts/keyboard-audit-cli.cjs https://site.go.kr/index.do --max-pages 20
+node scripts/keyboard-audit-cli.cjs https://site.go.kr/index.do --json   # JSON 출력
+```
+
+MCP 도구로도 노출: `audit_keyboard({ baseUrl, maxPages?, maxTabs?, sameOriginOnly? })`
+
+| ID | 탐지 내용 | KWCAG | severity |
+|----|-----------|-------|----------|
+| K-01 | **클릭/호버되는데 Tab 불가** — cursor:pointer·onclick·role이 있으나 페이지 로드(JS 실행) 후에도 포커스 불가 + Tab 미도달. 런타임에 JS가 tabindex를 부여하면(예: 정상 처리) 미발화 | 10 | critical |
+| K-02 | 양수 tabindex (런타임 확인) | 11 | warning |
+| K-03 | Tab 포커스 시 시각 표시(outline 등) 없음 | 11 | critical |
+| K-04 | 키보드 트랩 (Tab 진행 불가 — rect 기반 식별 + 연속 6회로 보수 판정) | 10 | critical |
+
+> **왜 동적인가:** "클릭되는데 Tab 안 됨"은 `cursor:pointer`(외부/inline CSS) + `addEventListener`(외부 JS) + DB 콘텐츠를 가로질러야 판정돼 단일 파일 정적 분석으론 불가(= A-40 교훈). 실제 브라우저에서 **JS 실행 후** Tab을 눌러보면 신뢰성 있게 잡힙니다. 페이지 로드 후 `settleDelay` 대기로 런타임 tabindex 부여를 정상 인식해 오탐을 막습니다. 소스 파일이 아니라 **실행 중인 사이트(URL)**를 검사하므로 정적 스캐너와 별도 모드로 동작합니다.
+
 ## Configuration
 
 Create `.govcheckrc.json` in your project root:

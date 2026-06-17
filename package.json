@@ -5,9 +5,20 @@
   "main": "scripts/mcp-server.cjs",
   "scripts": {
     "test": "node --test test/*.test.cjs",
-    "test:watch": "node --test --watch test/*.test.cjs"
+    "test:watch": "node --test --watch test/*.test.cjs",
+    "audit:keyboard": "node scripts/keyboard-audit-cli.cjs"
   },
-  "keywords": ["claude-code", "plugin", "govcheck", "korea", "government", "accessibility", "security", "egov", "KWCAG"],
+  "keywords": [
+    "claude-code",
+    "plugin",
+    "govcheck",
+    "korea",
+    "government",
+    "accessibility",
+    "security",
+    "egov",
+    "KWCAG"
+  ],
   "author": "sonsumin",
   "license": "MIT",
   "engines": {
@@ -17,5 +28,8 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "cheerio": "^1.0.0",
     "glob": "^10.0.0"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.61.0"
   }
 }
