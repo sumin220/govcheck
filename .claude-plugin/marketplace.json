@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "KWCAG 웹접근성, 시큐어코딩, 개인정보보호, eGov 호환성, GS인증 통합 점검",
-    "version": "1.1.0"
+    "version": "1.2.0"
   },
   "plugins": [
     {
