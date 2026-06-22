@@ -149,6 +149,102 @@ function readActiveElementInBrowser() {
   };
 }
 
+/**
+ * 텍스트 명도대비(KWCAG 5.4.3 / 항목 8) 측정 — page.evaluate 인자.
+ * WCAG 상대휘도로 본문 4.5:1·큰 글자 3:1 미달 텍스트를 수집한다.
+ * 오탐 가드(govcheck 철학): 배경이 이미지·그라데이션·반투명이라 확정 불가하거나,
+ * 글자색이 반투명이거나, 숨김/비활성/미세 요소면 제외한다(= 정적 분석으로 못 잡되 런타임에서 확실한 것만).
+ * (이 함수는 직렬화되어 브라우저에서 실행되므로 외부 변수를 참조하면 안 됨)
+ */
+function collectContrastInBrowser() {
+  function parseRgb(s) {
+    var m = (s || '').match(/rgba?\(([^)]+)\)/);
+    if (!m) return null;
+    var p = m[1].split(',').map(function (x) { return parseFloat(x); });
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  function lum(c) {
+    function ch(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  }
+  function ratio(f, b) { var a = lum(f), c = lum(b), hi = Math.max(a, c), lo = Math.min(a, c); return (hi + 0.05) / (lo + 0.05); }
+  // 배경 해석: 조상을 거슬러 올라가며 첫 solid 불투명 색을 반환. 이미지/그라데이션/반투명을 만나면 uncertain.
+  function resolveBg(el) {
+    var n = el, uncertain = false;
+    while (n && n.nodeType === 1) {
+      var cs = getComputedStyle(n);
+      if (cs.backgroundImage && cs.backgroundImage !== 'none') uncertain = true; // 이미지/그라데이션 위 텍스트 → 계산 불가
+      var c = parseRgb(cs.backgroundColor);
+      if (c) {
+        if (c.a === 1) return { bg: c, uncertain: uncertain };
+        if (c.a > 0) uncertain = true; // 반투명 배경 → 누적색 불확실
+      }
+      n = n.parentElement;
+    }
+    return { bg: { r: 255, g: 255, b: 255, a: 1 }, uncertain: uncertain };
+  }
+
+  // 비활성/흐림 상태 판정 — KWCAG는 비활성(disabled) UI 요소를 명도대비에서 면제한다.
+  // disabled 속성·aria-disabled뿐 아니라 클래스 기반 비활성(예: air-datepicker '-disabled-')과
+  // cursor:not-allowed까지 잡아 비활성 텍스트 오탐을 차단한다.
+  function isDisabledish(el, cs) {
+    if (cs.cursor === 'not-allowed') return true;
+    var n = el, depth = 0;
+    while (n && n.nodeType === 1 && depth < 4) {
+      if (n.disabled) return true;
+      if (n.getAttribute && n.getAttribute('aria-disabled') === 'true') return true;
+      var cn = typeof n.className === 'string' ? n.className : '';
+      if (/(?:^|[\s_-])(disabled|inactive|readonly)(?:[\s_-]|$)/i.test(cn)) return true;
+      n = n.parentElement; depth++;
+    }
+    return false;
+  }
+
+  var fails = [], checked = 0, seen = {};
+  var nodes = [].slice.call(document.querySelectorAll('body *'));
+  for (var i = 0; i < nodes.length && checked < 1000; i++) {
+    var el = nodes[i], cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) continue;
+    if (isDisabledish(el, cs)) continue; // 비활성/흐림 텍스트 예외
+    // 직접 텍스트 노드만 — 자식 요소의 텍스트는 그 요소가 따로 검사
+    var txt = '';
+    for (var j = 0; j < el.childNodes.length; j++) {
+      if (el.childNodes[j].nodeType === 3) txt += el.childNodes[j].textContent;
+    }
+    txt = txt.trim();
+    if (!txt) continue;
+    var rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4) continue; // 미세/숨김 요소
+    var fg = parseRgb(cs.color);
+    if (!fg || fg.a < 1) continue; // 반투명 글자 → 계산 불확실
+    var bgInfo = resolveBg(el);
+    if (bgInfo.uncertain) continue; // 배경 이미지/그라데이션/반투명 → 오탐 방지로 skip
+    var key = txt.slice(0, 30) + cs.color + cs.fontSize;
+    if (seen[key]) continue;
+    seen[key] = 1;
+    checked++;
+    var sz = parseFloat(cs.fontSize), wt = parseInt(cs.fontWeight, 10) || 400;
+    var large = sz >= 24 || (sz >= 18.66 && wt >= 700);
+    var thr = large ? 3 : 4.5;
+    var rr = ratio(fg, bgInfo.bg);
+    if (rr < thr - 0.05) { // 반올림 경계 여유
+      var code = '';
+      try { code = el.outerHTML.replace(/\s+/g, ' ').trim().slice(0, 140); } catch (e) { code = txt.slice(0, 60); }
+      fails.push({
+        text: txt.slice(0, 40),
+        ratio: Math.round(rr * 100) / 100,
+        threshold: thr,
+        fg: cs.color,
+        bg: 'rgb(' + bgInfo.bg.r + ',' + bgInfo.bg.g + ',' + bgInfo.bg.b + ')',
+        fontSize: Math.round(sz),
+        large: large,
+        code: code
+      });
+    }
+  }
+  return { contrastFails: fails, contrastChecked: checked };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 2. 순수 분석 — 프로브/Tab워크 결과 → violations (브라우저 불필요, 테스트 대상)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,7 +253,8 @@ const RULE_FALLBACK = {
   'K-01': { title: '클릭 가능하지만 키보드 접근 불가', severity: 'critical', category: '키보드 접근' },
   'K-02': { title: '양수 tabindex (포커스 순서 깨짐)', severity: 'warning', category: '키보드 접근' },
   'K-03': { title: 'Tab 포커스 시각 표시 없음', severity: 'critical', category: '키보드 포커스' },
-  'K-04': { title: '키보드 트랩 (Tab 진행 불가)', severity: 'critical', category: '키보드 접근' }
+  'K-04': { title: '키보드 트랩 (Tab 진행 불가)', severity: 'critical', category: '키보드 접근' },
+  'K-05': { title: '텍스트 명도대비 미달', severity: 'warning', category: '명도 대비' }
 };
 
 function ruleMeta(rules, id) {
@@ -231,6 +328,16 @@ function analyzePage(probe, walk, url, rules) {
       'Tab 키가 ' + (walk.trap.at != null ? (walk.trap.at + '번째 이동에서 ') : '') + '더 진행되지 않거나 일부 영역에 갇힙니다. 포커스 트랩(모달 등)에 Esc/순환 탈출을 제공하세요.'
     ));
   }
+
+  // K-05: 텍스트 명도대비 미달 (런타임 계산 — 배경 확정 가능한 것만, confidence medium)
+  const rK05 = ruleMeta(rules, 'K-05');
+  (probe.contrastFails || []).forEach((f) => {
+    violations.push(makeViolation(
+      rK05, url, f.code,
+      '명도대비 ' + f.ratio + ':1 (기준 ' + f.threshold + ':1' + (f.large ? ', 큰글자' : '') + ', ' + f.fontSize + 'px, 글자색 ' + f.fg + ' / 배경 ' + f.bg + '). 본문 4.5:1·큰글자 3:1 이상으로 조정하세요. (로고·장식·비활성 텍스트는 예외 — 수동 확인)',
+      { confidence: 'medium' }   // 배경 해석이 근사이므로 medium
+    ));
+  });
 
   return violations;
 }
@@ -342,11 +449,14 @@ async function auditSinglePage(page, url, rules, opts) {
   await page.waitForTimeout(opts.settleDelay); // JS가 동적 tabindex 부여할 시간
 
   const probe = await page.evaluate(collectCandidatesInBrowser);
+  const contrast = await page.evaluate(collectContrastInBrowser);
+  const merged = Object.assign({}, probe, contrast);
   const walk = await tabWalk(page, opts);
-  const violations = analyzePage(probe, walk, url, rules);
+  const violations = analyzePage(merged, walk, url, rules);
   return {
     url,
     candidates: probe.candidates.length,
+    contrastFails: (contrast.contrastFails || []).length,
     tabStops: walk.tabCount,
     violations
   };
@@ -397,7 +507,7 @@ async function runKeyboardAudit(options) {
         perPage.push({ url, error: String(e && e.message || e), violations: [] });
         continue;
       }
-      perPage.push({ url: result.url, candidates: result.candidates, tabStops: result.tabStops, violationCount: result.violations.length });
+      perPage.push({ url: result.url, candidates: result.candidates, contrastFails: result.contrastFails, tabStops: result.tabStops, violationCount: result.violations.length });
       allViolations.push(...result.violations);
 
       // 크롤 확장 (urls 명시 모드가 아니면)
@@ -431,6 +541,7 @@ module.exports = {
   // 브라우저 프로브 (직렬화되어 evaluate로 실행)
   collectCandidatesInBrowser,
   readActiveElementInBrowser,
+  collectContrastInBrowser,
   // 드라이버
   runKeyboardAudit,
   DEFAULTS

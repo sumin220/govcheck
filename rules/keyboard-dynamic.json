@@ -48,6 +48,17 @@
       "category": "키보드 접근",
       "kwcagItem": 10,
       "autoFixable": false
+    },
+    {
+      "id": "K-05",
+      "title": "텍스트 명도대비 미달",
+      "description": "텍스트와 배경의 명도대비가 본문 4.5:1·큰 글자(24px 또는 18.66px 굵게) 3:1 미만인 경우. WCAG 상대휘도 공식으로 런타임 계산한다. 배경이 이미지·그라데이션·반투명이라 확정 불가하거나 글자색이 반투명·비활성인 경우는 오탐 방지를 위해 제외하며, 로고·장식 텍스트는 예외이므로 수동 확인이 필요하다. 정적 분석(A-09)이 색상만 탐지하고 대비 계산은 못 하던 한계를 런타임으로 보완한다.",
+      "severity": "warning",
+      "tier": "DYN",
+      "patternType": "dynamic-browser",
+      "category": "명도 대비",
+      "kwcagItem": 8,
+      "autoFixable": false
     }
   ]
 }

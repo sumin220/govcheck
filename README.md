@@ -82,7 +82,7 @@ KWCAG 2.2 표준 33개 검사항목을 46개 정적 규칙으로 점검합니다
 
 ## 동적 키보드 접근성 감사 (Playwright)
 
-정적 분석으로는 **원리적으로 못 잡는** 런타임 키보드 문제 — 예: `cursor:pointer`/외부 JS `addEventListener`로만 동작해 클릭은 되지만 **Tab으로 도달 못 하는 요소**(KWCAG 10) — 를 실제 브라우저로 **살아있는 사이트를 크롤하며** 검사합니다. 정적 규칙 A-36(`onclick` 속성 한정)·A-25(outline 제거)의 런타임 보완입니다.
+정적 분석으로는 **원리적으로 못 잡는** 런타임 문제 — 예: `cursor:pointer`/외부 JS `addEventListener`로만 동작해 클릭은 되지만 **Tab으로 도달 못 하는 요소**(KWCAG 10), **명도대비 계산값**(KWCAG 8) — 를 실제 브라우저로 **살아있는 사이트를 크롤하며** 검사합니다. 정적 규칙 A-36(`onclick` 속성 한정)·A-25(outline 제거)·A-09(색상만 탐지·계산 불가)의 런타임 보완입니다.
 
 ```bash
 # 설치 (playwright는 optionalDependency)
@@ -101,8 +101,9 @@ MCP 도구로도 노출: `audit_keyboard({ baseUrl, maxPages?, maxTabs?, sameOri
 | K-02 | 양수 tabindex (런타임 확인) | 11 | warning |
 | K-03 | Tab 포커스 시 시각 표시(outline 등) 없음 | 11 | critical |
 | K-04 | 키보드 트랩 (Tab 진행 불가 — rect 기반 식별 + 연속 6회로 보수 판정) | 10 | critical |
+| K-05 | **텍스트 명도대비 미달** — WCAG 상대휘도로 본문 4.5:1·큰글자 3:1 미만을 런타임 계산. 배경이 이미지·그라데이션·반투명이거나 비활성(disabled·`-disabled-` 클래스·cursor:not-allowed)·반투명 글자는 오탐 방지로 제외. 로고·장식은 예외이므로 수동 확인(confidence medium) | 8 | warning |
 
-> **왜 동적인가:** "클릭되는데 Tab 안 됨"은 `cursor:pointer`(외부/inline CSS) + `addEventListener`(외부 JS) + DB 콘텐츠를 가로질러야 판정돼 단일 파일 정적 분석으론 불가(= A-40 교훈). 실제 브라우저에서 **JS 실행 후** Tab을 눌러보면 신뢰성 있게 잡힙니다. 페이지 로드 후 `settleDelay` 대기로 런타임 tabindex 부여를 정상 인식해 오탐을 막습니다. 소스 파일이 아니라 **실행 중인 사이트(URL)**를 검사하므로 정적 스캐너와 별도 모드로 동작합니다.
+> **왜 동적인가:** "클릭되는데 Tab 안 됨"은 `cursor:pointer`(외부/inline CSS) + `addEventListener`(외부 JS) + DB 콘텐츠를 가로질러야 판정돼 단일 파일 정적 분석으론 불가(= A-40 교훈). **명도대비**도 전경/배경색 + 렌더링된 누적 배경을 알아야 4.5:1 계산이 가능해 정적으론 색만 탐지(A-09)할 뿐 계산은 못 한다. 실제 브라우저에서 **JS 실행 후** Tab을 눌러보고 색을 계산하면 신뢰성 있게 잡힌다. 페이지 로드 후 `settleDelay` 대기로 런타임 tabindex 부여를 정상 인식해 오탐을 막는다. 소스 파일이 아니라 **실행 중인 사이트(URL)**를 검사하므로 정적 스캐너와 별도 모드로 동작한다.
 
 ## Configuration
 

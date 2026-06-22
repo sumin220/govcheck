@@ -14,8 +14,8 @@ const rules = JSON.parse(
 ).rules;
 
 describe('keyboard-audit: 규칙 JSON', () => {
-  it('K-01~K-04 규칙이 모두 정의됨', () => {
-    ['K-01', 'K-02', 'K-03', 'K-04'].forEach((id) => {
+  it('K-01~K-05 규칙이 모두 정의됨', () => {
+    ['K-01', 'K-02', 'K-03', 'K-04', 'K-05'].forEach((id) => {
       const r = rules.find((x) => x.id === id);
       assert.ok(r, id + ' 규칙 존재');
       assert.ok(r.title && r.severity && r.category, id + ' 필수 필드');
@@ -84,6 +84,29 @@ describe('keyboard-audit: analyzePage (순수 분석)', () => {
     const k04 = v.filter((x) => x.id === 'K-04');
     assert.strictEqual(k04.length, 1);
     assert.ok(k04[0].suggestion.includes('12'), '트랩 위치 안내');
+  });
+
+  it('K-05: 명도대비 미달 발화 (ratio·기준 안내 + confidence medium)', () => {
+    const probe = {
+      candidates: [], positiveTabindex: [],
+      contrastFails: [
+        { text: '저대비 텍스트', ratio: 2.1, threshold: 4.5, fg: 'rgb(150,150,150)', bg: 'rgb(255,255,255)', fontSize: 14, large: false, code: '<p>저대비 텍스트</p>' }
+      ]
+    };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: false } };
+    const v = analyzePage(probe, walk, url, rules);
+    const k05 = v.filter((x) => x.id === 'K-05');
+    assert.strictEqual(k05.length, 1);
+    assert.ok(k05[0].suggestion.includes('2.1:1'), '실측 대비비 포함');
+    assert.ok(k05[0].suggestion.includes('4.5:1'), '기준 포함');
+    assert.strictEqual(k05[0].confidence, 'medium', '배경 근사라 medium');
+    assert.strictEqual(k05[0].category, '명도 대비');
+  });
+
+  it('K-05: 미달 텍스트 없으면 미발화', () => {
+    const probe = { candidates: [], positiveTabindex: [], contrastFails: [] };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: false } };
+    assert.strictEqual(analyzePage(probe, walk, url, rules).filter((x) => x.id === 'K-05').length, 0);
   });
 
   it('위반 없음: 깨끗한 페이지는 빈 배열', () => {
