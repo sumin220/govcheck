@@ -736,7 +736,7 @@ async function handleToolCall(toolName, args) {
 // Start MCP server when run directly
 if (require.main === module) {
   const server = new Server(
-    { name: 'govcheck', version: '1.0.0' },
+    { name: 'govcheck', version: '1.4.0' },
     { capabilities: { tools: {} } }
   );
 
