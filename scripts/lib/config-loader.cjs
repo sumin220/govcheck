@@ -20,6 +20,10 @@ const DEFAULTS = {
   },
   severity: 'warning',
   ignore: [],
+  // 접근성 CSS 스캔(A-09/A-25) 시 제외할 제3자/번들/압축 CSS 경로 조각.
+  // 팀이 고칠 수 없는 vendor CSS의 대량 오탐이 자체 CSS의 진짜 결함을 묻지 않도록 한다.
+  // 사이트 특정값이 아닌 보편적 third-party 관례 경로만 둔다. .govcheckrc.json에서 재정의 가능.
+  cssVendorIgnore: ['.min.css', '/lib/', '/vendor/', '/plugins/', '/dist/', '/ckeditor/'],
   maxResults: 100
 };
 

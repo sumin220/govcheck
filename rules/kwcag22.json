@@ -219,7 +219,7 @@
       "tier": "T2",
       "pattern": "font-size\\s*:\\s*\\d+px",
       "patternType": "regex",
-      "fileTypes": ["html", "jsp", "vue", "ejs", "css"],
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
       "category": "텍스트 크기",
       "autoFixable": false
     },

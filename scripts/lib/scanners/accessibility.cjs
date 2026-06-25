@@ -421,6 +421,102 @@ function checkA49($, source, rule, filePath) {
 // 따라서 kwcag22.json에서 tier=T3(수동 점검)로 전환했고 전용 check 함수를 두지 않는다.
 
 /**
+ * Handle A-05 (html lang missing): fire ONLY when the source contains a real
+ * `<html ...>` opening tag that lacks a lang/xml:lang attribute.
+ *
+ * Why a dedicated handler instead of the generic css-selector `html:not([lang])`:
+ * cheerio synthesizes an `<html>` wrapper around EVERY parsed fragment, so the
+ * css-selector fired on Tiles content fragments / includes that never emit an
+ * `<html>` element at runtime (the document `<html lang>` is contributed solely by
+ * the layout JSP). That produced massive false positives. Matching the literal tag
+ * in the (comment-masked) source eliminates fragment synthesis artifacts while still
+ * catching genuine standalone documents (full pages, popup/iframe pages) missing lang.
+ *
+ * @param {string} maskedSource - source with JSP/HTML comments masked to spaces
+ * @param {object} rule
+ * @param {string} filePath
+ * @returns {Array}
+ */
+function checkA05(maskedSource, rule, filePath) {
+  const violations = [];
+  const htmlTagRe = /<html\b[^>]*>/gi;
+  let m;
+  while ((m = htmlTagRe.exec(maskedSource)) !== null) {
+    const tag = m[0];
+    // lang 또는 xml:lang 보유 시 통과. 속성 시작 경계(태그명 뒤 공백)에 앵커링해
+    // data-html-lang= 같은 토큰을 lang 속성으로 오인하지 않는다. EL 값(lang="${locale}")도 인정.
+    if (/(^|\s)(?:xml:)?lang\s*=/i.test(tag)) continue;
+    const line = maskedSource.slice(0, m.index).split('\n').length;
+    violations.push({
+      id: rule.id,
+      title: rule.title,
+      severity: rule.severity,
+      tier: rule.tier,
+      file: filePath,
+      line,
+      column: 0,
+      code: tag.slice(0, 200),
+      suggestion: rule.autoFixTemplate || '<html lang="ko">',
+      autoFixable: rule.autoFixable || false,
+      confidence: rule.tier === 'T1' ? 'high' : 'medium',
+      category: rule.patternType
+    });
+  }
+  return violations;
+}
+
+// 개선 #2: CSS 파일 전용 접근성 스캔 — 접근성 규칙 중 fileTypes에 'css'가 선언된 regex 규칙
+// (A-09 명도대비 하드코딩 색상, A-18 px 고정, A-25 outline 제거)을 외부 CSS 파일에도 적용한다.
+// cheerio/preprocessJsp(JSP 전용)를 거치지 않고 CSS 주석(/* */)만 마스킹한 뒤 regex를 돌린다.
+// 외부 스타일시트에 정의된 초점 제거·저대비 색을 정적 단계에서 포착하기 위함(A-25/A-09 사각 보완).
+const CSS_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
+
+/**
+ * Scan a CSS file with the accessibility regex rules that declare `css` in fileTypes.
+ *
+ * @param {string} filePath - Absolute path to a .css file
+ * @param {object} ruleSet - Parsed kwcag22.json object { rules: [...] }
+ * @returns {Promise<Array>} violations
+ */
+async function scanAccessibilityCss(filePath, ruleSet) {
+  const source = fs.readFileSync(filePath, 'utf-8');
+  // 주석 내부를 공백으로 치환(오프셋·라인 번호 보존) — 주석 처리된 옛 스타일 오탐 방지.
+  const masked = source.replace(CSS_COMMENT_RE, (m) => m.replace(/[^\n]/g, ' '));
+
+  const violations = [];
+  for (const rule of (ruleSet.rules || [])) {
+    if (rule.tier === 'T3') continue;           // 수동 점검 규칙 제외
+    if (rule.patternType !== 'regex') continue; // css-selector(마크업 전용)는 CSS에 미적용
+    if (!rule.pattern) continue;
+    if (!(rule.fileTypes || []).includes('css')) continue;
+
+    let regex;
+    try { regex = new RegExp(rule.pattern, 'gi'); } catch (e) { continue; }
+
+    let match;
+    while ((match = regex.exec(masked)) !== null) {
+      const code = match[0].slice(0, 200);
+      const line = masked.slice(0, match.index).split('\n').length;
+      violations.push({
+        id: rule.id,
+        title: rule.title,
+        severity: rule.severity,
+        tier: rule.tier,
+        file: filePath,
+        line,
+        column: 0,
+        code,
+        suggestion: rule.autoFixTemplate || '',
+        autoFixable: rule.autoFixable || false,
+        confidence: rule.tier === 'T1' ? 'high' : 'medium',
+        category: rule.patternType   // JSP 경로와 동일 컨벤션 유지(동일 규칙이 파일종류에 따라 category가 갈리지 않도록)
+      });
+    }
+  }
+  return violations;
+}
+
+/**
  * Main accessibility scanner.
  *
  * @param {string} filePath - Absolute path to JSP/HTML file
@@ -478,6 +574,7 @@ async function scanAccessibility(filePath, ruleSet) {
       continue;
     }
 
+    if (rule.id === 'A-05') { violations.push(...checkA05(maskedSource, rule, filePath)); continue; }
     if (rule.id === 'A-34') { violations.push(...checkA34($, source, rule, filePath)); continue; }
     if (rule.id === 'A-46') { violations.push(...checkA46($, source, rule, filePath)); continue; }
     if (rule.id === 'A-49') { violations.push(...checkA49($, source, rule, filePath)); continue; }
@@ -552,4 +649,4 @@ async function scanAccessibility(filePath, ruleSet) {
   return violations;
 }
 
-module.exports = { scanAccessibility };
+module.exports = { scanAccessibility, scanAccessibilityCss };

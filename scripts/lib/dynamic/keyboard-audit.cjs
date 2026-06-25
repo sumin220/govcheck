@@ -20,6 +20,7 @@ const DEFAULTS = {
   navTimeout: 20000,   // 페이지 이동 타임아웃(ms)
   settleDelay: 700,    // JS 실행(tabindex 동적 부여 등) 대기(ms)
   sameOriginOnly: true,
+  ignoreSelectors: [], // 개선 #3b: 통제 불가 영역(공용 GNB 등) CSS 셀렉터 목록 — external 처리해 제외
   viewport: { width: 1280, height: 900 }
 };
 
@@ -32,7 +33,12 @@ const DEFAULTS = {
  * 각 후보에 data-kbd-audit-id를 부여해 Tab 도달 여부와 대조할 수 있게 한다.
  * (이 함수는 직렬화되어 브라우저에서 실행되므로 외부 변수를 참조하면 안 됨)
  */
-function collectCandidatesInBrowser() {
+function collectCandidatesInBrowser(opts) {
+  // 개선 #3b: ignoreSelectors(공용 GNB 등 통제 불가 영역) 매칭 요소는 external로 표시 → analyzePage가 제외.
+  const ignoreSelectors = (opts && opts.ignoreSelectors) || [];
+  const isExternal = (el) => {
+    try { return ignoreSelectors.some((s) => el.closest(s)); } catch (e) { return false; }
+  };
   const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [contenteditable="true"], audio[controls], video[controls], iframe, summary';
   const INTERACTIVE_ROLES = ['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio', 'switch', 'option'];
 
@@ -69,7 +75,7 @@ function collectCandidatesInBrowser() {
       const ti = parseInt(tiAttr, 10);
       if (!isNaN(ti) && ti > 0) {
         const d = describe(el);
-        positiveTabindex.push({ tabindex: ti, sel: d.sel, code: d.code });
+        positiveTabindex.push({ tabindex: ti, sel: d.sel, code: d.code, external: isExternal(el) });
       }
     }
 
@@ -104,7 +110,8 @@ function collectCandidatesInBrowser() {
       auditId,
       sel: d.sel,
       code: d.code,
-      reason: hasOnclick ? 'onclick' : (interactiveRole ? ('role=' + role) : 'cursor:pointer')
+      reason: hasOnclick ? 'onclick' : (interactiveRole ? ('role=' + role) : 'cursor:pointer'),
+      external: isExternal(el)
     });
   });
 
@@ -118,7 +125,8 @@ function collectCandidatesInBrowser() {
 /**
  * 현재 포커스된 요소의 식별/포커스 가시성 정보를 반환 (page.evaluate 인자).
  */
-function readActiveElementInBrowser() {
+function readActiveElementInBrowser(opts) {
+  const ignoreSelectors = (opts && opts.ignoreSelectors) || [];
   const el = document.activeElement;
   if (!el || el === document.body || el === document.documentElement) {
     return { none: true };
@@ -139,13 +147,26 @@ function readActiveElementInBrowser() {
     const r = el.getBoundingClientRect();
     rectKey = [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)].join(',');
   } catch (e) { rectKey = ''; }
+  // 개선 #3b: cross-origin iframe(내부 포커스/스타일 측정 불가) 또는 ignoreSelectors 매칭 → external.
+  let external = false;
+  if (el.tagName === 'IFRAME') {
+    try {
+      const src = el.getAttribute('src') || '';
+      if (src) { const u = new URL(src, location.href); if (u.origin !== location.origin) external = true; }
+    } catch (e) { /* noop */ }
+  }
+  if (!external && ignoreSelectors.length) {
+    try { if (ignoreSelectors.some((s) => el.closest(s))) external = true; } catch (e) { /* noop */ }
+  }
+
   return {
     none: false,
     auditId: auditId || null,
     sel,
     code,
     rectKey,
-    focusVisible: !!(outlineVisible || boxShadowVisible || borderVisible)
+    focusVisible: !!(outlineVisible || boxShadowVisible || borderVisible),
+    external
   };
 }
 
@@ -156,7 +177,12 @@ function readActiveElementInBrowser() {
  * 글자색이 반투명이거나, 숨김/비활성/미세 요소면 제외한다(= 정적 분석으로 못 잡되 런타임에서 확실한 것만).
  * (이 함수는 직렬화되어 브라우저에서 실행되므로 외부 변수를 참조하면 안 됨)
  */
-function collectContrastInBrowser() {
+function collectContrastInBrowser(opts) {
+  // 개선 #3b: ignoreSelectors(공용 GNB 등) 매칭 텍스트는 external로 표시 → analyzePage가 제외.
+  var ignoreSelectors = (opts && opts.ignoreSelectors) || [];
+  function isExternal(el) {
+    try { return ignoreSelectors.some(function (s) { return el.closest(s); }); } catch (e) { return false; }
+  }
   function parseRgb(s) {
     var m = (s || '').match(/rgba?\(([^)]+)\)/);
     if (!m) return null;
@@ -238,7 +264,8 @@ function collectContrastInBrowser() {
         bg: 'rgb(' + bgInfo.bg.r + ',' + bgInfo.bg.g + ',' + bgInfo.bg.b + ')',
         fontSize: Math.round(sz),
         large: large,
-        code: code
+        code: code,
+        external: isExternal(el)
       });
     }
   }
@@ -292,9 +319,14 @@ function analyzePage(probe, walk, url, rules) {
   const violations = [];
   const reached = new Set(walk && walk.reachedAuditIds ? walk.reachedAuditIds : []);
 
+  // 개선 #3b: external:true 항목(통제 불가 영역 — cross-origin iframe·공용 GNB 등)은
+  // 오탐 감소를 위해 모든 K-rule에서 제외한다. external 판정은 브라우저 프로브(ignoreSelectors
+  // 매칭·cross-origin iframe 감지)에서 부여되며, 여기서는 정책(제외)만 적용해 단위테스트가 가능하다.
+
   // K-01: 클릭 가능해 보이지만 Tab으로 도달 못 함
   const rK01 = ruleMeta(rules, 'K-01');
   (probe.candidates || []).forEach((c) => {
+    if (c.external) return;             // 통제 불가 영역 제외
     if (reached.has(c.auditId)) return; // Tab으로 실제 도달했으면 통과
     violations.push(makeViolation(
       rK01, url, c.code,
@@ -305,6 +337,7 @@ function analyzePage(probe, walk, url, rules) {
   // K-02: 양수 tabindex
   const rK02 = ruleMeta(rules, 'K-02');
   (probe.positiveTabindex || []).forEach((t) => {
+    if (t.external) return;
     violations.push(makeViolation(
       rK02, url, t.code,
       'tabindex="' + t.tabindex + '" — 양수 tabindex는 자연스러운 포커스 순서를 깨뜨립니다. 0 또는 -1만 사용하세요.'
@@ -314,14 +347,15 @@ function analyzePage(probe, walk, url, rules) {
   // K-03: 포커스 시각 표시 없음
   const rK03 = ruleMeta(rules, 'K-03');
   (walk && walk.focusInvisible ? walk.focusInvisible : []).forEach((f) => {
+    if (f.external) return;
     violations.push(makeViolation(
       rK03, url, f.code,
       'Tab 포커스 시 outline 등 시각적 표시가 없습니다. :focus-visible에 outline/box-shadow를 제공하세요. (outline:none 제거 또는 대체 스타일)'
     ));
   });
 
-  // K-04: 키보드 트랩
-  if (walk && walk.trap && walk.trap.detected) {
+  // K-04: 키보드 트랩 (cross-origin iframe 등 external 트랩은 측정 한계라 제외)
+  if (walk && walk.trap && walk.trap.detected && !walk.trap.external) {
     const rK04 = ruleMeta(rules, 'K-04');
     violations.push(makeViolation(
       rK04, url, walk.trap.sel || '',
@@ -332,6 +366,7 @@ function analyzePage(probe, walk, url, rules) {
   // K-05: 텍스트 명도대비 미달 (런타임 계산 — 배경 확정 가능한 것만, confidence medium)
   const rK05 = ruleMeta(rules, 'K-05');
   (probe.contrastFails || []).forEach((f) => {
+    if (f.external) return;
     violations.push(makeViolation(
       rK05, url, f.code,
       '명도대비 ' + f.ratio + ':1 (기준 ' + f.threshold + ':1' + (f.large ? ', 큰글자' : '') + ', ' + f.fontSize + 'px, 글자색 ' + f.fg + ' / 배경 ' + f.bg + '). 본문 4.5:1·큰글자 3:1 이상으로 조정하세요. (로고·장식·비활성 텍스트는 예외 — 수동 확인)',
@@ -403,7 +438,7 @@ async function tabWalk(page, opts) {
   for (let i = 0; i < opts.maxTabs; i++) {
     await page.keyboard.press('Tab');
     let info;
-    try { info = await page.evaluate(readActiveElementInBrowser); } catch (e) { break; }
+    try { info = await page.evaluate(readActiveElementInBrowser, { ignoreSelectors: opts.ignoreSelectors || [] }); } catch (e) { break; }
     if (info.none) {
       // 포커스가 문서 밖(주소창 등)으로 나감 → 정상 종료로 간주
       break;
@@ -413,7 +448,8 @@ async function tabWalk(page, opts) {
     visitedSeq.push(key);
 
     if (info.auditId) reachedAuditIds.push(info.auditId);
-    if (!info.focusVisible && !seenInvisible.has(key)) {
+    // external(cross-origin iframe·공용 GNB)은 K-03 측정에서 제외 (개선 #3b)
+    if (!info.external && !info.focusVisible && !seenInvisible.has(key)) {
       seenInvisible.add(key);
       focusInvisible.push({ sel: info.sel, code: info.code });
     }
@@ -423,7 +459,8 @@ async function tabWalk(page, opts) {
     if (key === prevKey) {
       stuckCount += 1;
       if (stuckCount >= 5) { // 동일 요소 6회 연속(최초 1 + 반복 5)
-        trap = { detected: true, at: i, sel: info.sel + ' ' + (info.code || '').slice(0, 60) };
+        // external(cross-origin iframe)에 갇힌 건 내부 측정 불가에 따른 한계 → trap.external로 표시(analyzePage가 제외)
+        trap = { detected: true, at: i, sel: info.sel + ' ' + (info.code || '').slice(0, 60), external: !!info.external };
         break;
       }
     } else {
@@ -448,8 +485,9 @@ async function auditSinglePage(page, url, rules, opts) {
   try { await page.waitForLoadState('networkidle', { timeout: 3000 }); } catch (e) { /* best-effort */ }
   await page.waitForTimeout(opts.settleDelay); // JS가 동적 tabindex 부여할 시간
 
-  const probe = await page.evaluate(collectCandidatesInBrowser);
-  const contrast = await page.evaluate(collectContrastInBrowser);
+  const probeArg = { ignoreSelectors: opts.ignoreSelectors || [] };
+  const probe = await page.evaluate(collectCandidatesInBrowser, probeArg);
+  const contrast = await page.evaluate(collectContrastInBrowser, probeArg);
   const merged = Object.assign({}, probe, contrast);
   const walk = await tabWalk(page, opts);
   const violations = analyzePage(merged, walk, url, rules);

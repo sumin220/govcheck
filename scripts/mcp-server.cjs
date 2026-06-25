@@ -7,7 +7,7 @@ const { loadConfig } = require('./lib/config-loader.cjs');
 const { loadRules } = require('./lib/rules-loader.cjs');
 const { scanFiles } = require('./lib/scanner.cjs');
 const { getChangedFiles } = require('./lib/git-diff.cjs');
-const { scanAccessibility } = require('./lib/scanners/accessibility.cjs');
+const { scanAccessibility, scanAccessibilityCss } = require('./lib/scanners/accessibility.cjs');
 const { scanWebstandard } = require('./lib/scanners/webstandard.cjs');
 const { scanSecurecoding } = require('./lib/scanners/securecoding.cjs');
 const { scanPrivacy } = require('./lib/scanners/privacy.cjs');
@@ -15,6 +15,7 @@ const { scanEgovCompat } = require('./lib/scanners/egov-compat.cjs');
 const { scanQuality } = require('./lib/scanners/quality.cjs');
 const { scanWebvuln } = require('./lib/scanners/webvuln.cjs');
 const { runKeyboardAudit } = require('./lib/dynamic/keyboard-audit.cjs');
+const { generateReport } = require('./lib/report.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -38,6 +39,18 @@ const DOMAIN_SCANNERS = {
 };
 
 /**
+ * 단일 파일 점검 시 확장자별로 적용할 도메인 목록.
+ * (egovCompat은 프로젝트 레벨 점검이라 단일 파일 대상에서 제외)
+ */
+const FILE_DOMAIN_MAP = {
+  '.jsp': ['accessibility', 'webstandard', 'securecoding', 'privacy', 'webvuln'],
+  '.html': ['accessibility', 'webstandard', 'securecoding', 'privacy', 'webvuln'],
+  '.java': ['securecoding', 'privacy', 'quality', 'webvuln'],
+  '.css': ['accessibility'],
+  '.xml': ['webvuln']
+};
+
+/**
  * Per-domain timeout wrapper (30 seconds default).
  * Returns the promise result or rejects with TIMEOUT error.
  */
@@ -46,6 +59,20 @@ function withTimeout(promise, ms = 30000) {
     promise,
     new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), ms))
   ]);
+}
+
+/**
+ * 접근성 CSS 스캔에서 제외할 vendor/번들/압축 CSS 여부 (config.cssVendorIgnore 경로 조각 매칭).
+ * 팀이 고칠 수 없는 제3자 CSS의 대량 오탐(A-09/A-25)이 자체 CSS의 진짜 결함을 묻지 않도록 한다.
+ *
+ * @param {string} filePath
+ * @param {string[]} vendorIgnore
+ * @returns {boolean}
+ */
+function isVendorCss(filePath, vendorIgnore) {
+  const list = vendorIgnore || [];
+  const p = String(filePath).replace(/\\/g, '/');
+  return list.some((frag) => p.includes(frag));
 }
 
 /**
@@ -119,6 +146,18 @@ async function handleScanDomain(domainName, args) {
         const violations = await withTimeout(domainConfig.scanner(file, ruleSet));
         allViolations.push(...violations);
       }
+
+      // 개선 #2: 접근성 도메인은 외부 CSS 파일도 스캔 (css fileType 규칙: A-09 명도대비, A-18 px, A-25 초점 제거).
+      // JSP만 보던 기존 파이프라인이 외부 스타일시트의 초점/명도 결함을 못 보던 사각을 보완한다.
+      if (domainName === 'accessibility') {
+        const cssFiles = (await scanFiles(args.projectRoot, config.paths.css, config.ignore))
+          .filter((f) => !isVendorCss(f, config.cssVendorIgnore));
+        for (const file of cssFiles) {
+          const violations = await withTimeout(scanAccessibilityCss(file, ruleSet));
+          allViolations.push(...violations);
+        }
+        scannedFiles += cssFiles.length;
+      }
     }
   } catch (err) {
     if (err.message === 'TIMEOUT') {
@@ -152,6 +191,89 @@ async function handleScanDomain(domainName, args) {
 }
 
 /**
+ * Scan a SINGLE file across the domains applicable to its extension.
+ * "페이지(파일) 하나만" 빠르게 점검하는 technic — 전체(scan_all)와 대비된다.
+ *
+ * @param {object} args - { filePath, projectRoot?, maxResults? }
+ * @returns {Promise<object>} { file, results:[{domain, violations, totalCount}], totalElapsed }
+ */
+async function handleScanFile(args) {
+  const startTime = Date.now();
+  const filePath = args.filePath;
+  let st;
+  try { st = fs.statSync(filePath); }
+  catch (e) { return { file: filePath, error: 'FILE_NOT_FOUND', results: [], totalElapsed: Date.now() - startTime }; }
+  if (!st.isFile()) {
+    return { file: filePath, error: 'NOT_A_FILE', results: [], totalElapsed: Date.now() - startTime };
+  }
+
+  // 설정은 projectRoot(있으면) 또는 파일이 속한 디렉터리 기준으로 로드.
+  const config = loadConfig(args.projectRoot || path.dirname(filePath), { maxResults: args.maxResults });
+  const rules = loadRules(path.join(__dirname, '..', 'rules'));
+  const maxResults = args.maxResults || config.maxResults;
+  const ext = path.extname(filePath).toLowerCase();
+  const domains = FILE_DOMAIN_MAP[ext] || [];
+
+  if (domains.length === 0) {
+    return { file: filePath, results: [], totalElapsed: Date.now() - startTime, note: 'UNSUPPORTED_EXT' };
+  }
+
+  const results = [];
+  for (const domain of domains) {
+    if (config.scan[domain] === false) continue;
+    const dc = DOMAIN_SCANNERS[domain];
+    const ruleSet = rules[dc.ruleKey];
+    const domainStart = Date.now();
+    let allViolations = [];
+    try {
+      // 접근성 + CSS 파일은 전용 CSS 스캐너 사용 (개선 #2)
+      if (domain === 'accessibility' && ext === '.css') {
+        allViolations = await withTimeout(scanAccessibilityCss(filePath, ruleSet));
+      } else {
+        allViolations = await withTimeout(dc.scanner(filePath, ruleSet));
+      }
+    } catch (err) {
+      results.push({ domain, scannedFiles: 1, elapsed: Date.now() - domainStart, violations: [], truncated: false, totalCount: 0, error: err.message === 'TIMEOUT' ? 'timeout' : 'scan_error' });
+      continue;
+    }
+    const totalCount = allViolations.length;
+    results.push({
+      domain,
+      scannedFiles: 1,
+      elapsed: Date.now() - domainStart,
+      violations: allViolations.slice(0, maxResults),
+      truncated: totalCount > maxResults,
+      totalCount
+    });
+  }
+
+  return { file: filePath, results, totalElapsed: Date.now() - startTime };
+}
+
+/**
+ * 점검 실행(전체 또는 단일 파일) 후 사람이 읽는 리포트(Markdown/HTML)를 생성한다.
+ * filePath가 있으면 단일 파일, 없으면 프로젝트 전체(scan_all)를 점검한다.
+ *
+ * @param {object} args - { projectRoot?, filePath?, format?('md'|'html'|'both'), baseUrl?, maxResults? }
+ * @returns {Promise<object>} { target, summary, markdown, html? }
+ */
+async function handleScanReport(args) {
+  // 리포트는 결과 잘림(truncated)이 있으면 "위반 미발견" 집계가 불가해진다.
+  // 기본 maxResults를 크게 잡아 잘림을 방지(호출자가 명시하면 존중).
+  const reportArgs = Object.assign({}, args, { maxResults: args.maxResults || 100000 });
+  const scan = reportArgs.filePath ? await handleScanFile(reportArgs) : await handleScanAll(reportArgs);
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const rep = generateReport(scan, { timestamp: stamp });
+  const out = {
+    target: scan.file || args.projectRoot || '(project)',
+    summary: rep.data.totals,
+    markdown: rep.markdown
+  };
+  if (args.format === 'html' || args.format === 'both') out.html = rep.html;
+  return out;
+}
+
+/**
  * Scan all enabled domains against the given project root.
  *
  * @param {object} args - { projectRoot, maxResults }
@@ -168,6 +290,29 @@ async function handleScanAll(args) {
   const results = await Promise.all(
     domains.map(domain => handleScanDomain(domain, args))
   );
+
+  // 개선 #3a: baseUrl(또는 dynamicUrls)이 주어지면 동적 키보드/명도대비 감사(K-01~K-05)를 함께 실행해
+  // 결과에 'keyboard' 도메인으로 추가한다. 정적 분석이 못 보는 외부 CSS 초점(K-03)·런타임 명도대비(K-05)·
+  // JS 바인딩 클릭요소(K-01)를 보완. baseUrl이 없으면 기존과 동일하게 정적 도메인만 반환(기본 동작 불변).
+  if (args.baseUrl || (args.dynamicUrls && args.dynamicUrls.length)) {
+    const kb = await handleAuditKeyboard({
+      baseUrl: args.baseUrl,
+      urls: args.dynamicUrls,
+      ignoreSelectors: args.ignoreSelectors,
+      maxPages: args.maxPages,
+      maxTabs: args.maxTabs,
+      maxResults: args.maxResults
+    });
+    results.push({
+      domain: 'keyboard',
+      scannedFiles: kb.pagesScanned || 0,
+      elapsed: kb.elapsed || 0,
+      violations: kb.violations || [],
+      truncated: kb.truncated || false,
+      totalCount: kb.totalCount || 0,
+      ...(kb.error ? { error: kb.error, message: kb.message } : {})
+    });
+  }
 
   return {
     results,
@@ -255,6 +400,16 @@ async function handleScanDiff(args) {
         for (const file of domainFiles) {
           const violations = await withTimeout(domainConfig.scanner(file, ruleSet));
           allViolations.push(...violations);
+        }
+
+        // 개선 #2: 접근성 diff는 변경된 CSS 파일도 scanAccessibilityCss로 스캔
+        if (domainName === 'accessibility') {
+          const cssChanged = changedFiles.filter(f => f.endsWith('.css') && !isVendorCss(f, config.cssVendorIgnore));
+          for (const file of cssChanged) {
+            const violations = await withTimeout(scanAccessibilityCss(file, ruleSet));
+            allViolations.push(...violations);
+          }
+          scannedFiles += cssChanged.length;
         }
       }
     } catch (err) {
@@ -382,14 +537,46 @@ const TOOL_DEFINITIONS = [
   },
   {
     name: 'scan_all',
-    description: 'Run all enabled domain scanners against the project (accessibility, webstandard, securecoding, privacy, egovCompat, quality, webvuln)',
+    description: 'Run all enabled domain scanners against the project (accessibility, webstandard, securecoding, privacy, egovCompat, quality, webvuln). 접근성 도메인은 JSP뿐 아니라 CSS 파일도 스캔한다. baseUrl을 주면 동적 키보드/명도대비 감사(K-01~K-05)도 함께 실행해 keyboard 도메인으로 추가한다.',
     inputSchema: {
       type: 'object',
       properties: {
         projectRoot: { type: 'string', description: 'Absolute path to the project root directory' },
-        maxResults: { type: 'number', description: 'Maximum number of violations per domain (default: 100)' }
+        maxResults: { type: 'number', description: 'Maximum number of violations per domain (default: 100)' },
+        baseUrl: { type: 'string', description: '(선택) 동적 키보드/명도대비 감사를 함께 실행할 살아있는 사이트 URL. 주면 keyboard 도메인 추가.' },
+        dynamicUrls: { type: 'array', items: { type: 'string' }, description: '(선택) 크롤 대신 명시적으로 동적 감사할 URL 목록' },
+        ignoreSelectors: { type: 'array', items: { type: 'string' }, description: '(선택) 동적 감사에서 제외할 통제 불가 영역 CSS 셀렉터(예: 공용 GNB). cross-origin iframe은 기본 제외.' },
+        maxPages: { type: 'number', description: '(선택) 동적 감사 크롤 최대 페이지 수' },
+        maxTabs: { type: 'number', description: '(선택) 동적 감사 페이지당 Tab 최대 횟수' }
       },
       required: ['projectRoot']
+    }
+  },
+  {
+    name: 'scan_file',
+    description: '단일 파일(JSP/HTML/Java/CSS/XML) 하나만 확장자에 맞는 도메인 스캐너로 점검한다. "페이지/파일 하나만" 빠르게 확인하는 용도 — 전체 프로젝트는 scan_all을 쓴다. 반환: { file, results:[{domain, violations, totalCount, truncated}], totalElapsed }. 파일이 없으면 error:"FILE_NOT_FOUND", 디렉터리면 "NOT_A_FILE", 미지원 확장자면 note:"UNSUPPORTED_EXT".',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        filePath: { type: 'string', description: 'Absolute path to the file to scan' },
+        projectRoot: { type: 'string', description: '(선택) .govcheckrc.json 설정을 로드할 프로젝트 루트 (미지정 시 파일 디렉터리 기준)' },
+        maxResults: { type: 'number', description: 'Maximum number of violations per domain (default: 100)' }
+      },
+      required: ['filePath']
+    }
+  },
+  {
+    name: 'scan_report',
+    description: '점검(전체 또는 단일 파일)을 실행하고 미흡 사항을 사람이 읽는 리포트(Markdown/HTML)로 생성한다. 요약(부적합·위반미발견·수동확인) + 도메인별 표 + 부적합 상세 + 수동확인 안내 포함. filePath를 주면 단일 파일, 없으면 프로젝트 전체. 반환: { target, summary:{violations,critical,warning,info,failRules,noViolRules,manualRules,truncatedDomains}, markdown, html? }. "위반 미발견"은 적합 보장이 아님.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectRoot: { type: 'string', description: 'Absolute path to the project root (전체 점검 시)' },
+        filePath: { type: 'string', description: '(선택) 단일 파일만 점검할 경로' },
+        format: { type: 'string', enum: ['md', 'html', 'both'], description: "출력 형식 (기본 md). 'both'면 html도 포함." },
+        maxResults: { type: 'number', description: 'Maximum number of violations per domain (default: 100)' }
+      },
+      required: []
     }
   },
   {
@@ -416,7 +603,8 @@ const TOOL_DEFINITIONS = [
         maxPages: { type: 'number', description: '크롤 최대 페이지 수 (기본 20)' },
         maxTabs: { type: 'number', description: '페이지당 Tab 최대 횟수 (기본 200)' },
         maxResults: { type: 'number', description: '반환 violation 최대 수 (기본 100)' },
-        sameOriginOnly: { type: 'boolean', description: '같은 출처만 크롤 (기본 true)' }
+        sameOriginOnly: { type: 'boolean', description: '같은 출처만 크롤 (기본 true)' },
+        ignoreSelectors: { type: 'array', items: { type: 'string' }, description: '통제 불가 영역(공용 GNB 등) 제외용 CSS 셀렉터 목록. cross-origin iframe은 기본 제외됨.' }
       },
       required: []
     }
@@ -462,7 +650,8 @@ async function handleAuditKeyboard(args) {
       rules: loadKeyboardRules(),
       maxPages: args.maxPages || 20,
       maxTabs: args.maxTabs || 200,
-      sameOriginOnly: args.sameOriginOnly !== false
+      sameOriginOnly: args.sameOriginOnly !== false,
+      ignoreSelectors: args.ignoreSelectors || []   // 개선 #3b: 통제 불가 영역(공용 GNB 등) 제외
     });
     const total = result.violations.length;
     return {
@@ -505,6 +694,21 @@ async function handleToolCall(toolName, args) {
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       isError: !!result.error
+    };
+  }
+
+  if (toolName === 'scan_file') {
+    const result = await handleScanFile(args);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      isError: !!result.error
+    };
+  }
+
+  if (toolName === 'scan_report') {
+    const result = await handleScanReport(args);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
     };
   }
 
@@ -555,4 +759,4 @@ if (require.main === module) {
 }
 
 // Export handlers for testing
-module.exports = { handleScanAll, handleScanDomain, handleScanDiff, handleAuditKeyboard, handleToolCall, DOMAIN_SCANNERS, TOOL_DEFINITIONS };
+module.exports = { handleScanAll, handleScanDomain, handleScanFile, handleScanReport, handleScanDiff, handleAuditKeyboard, handleToolCall, DOMAIN_SCANNERS, TOOL_DEFINITIONS };

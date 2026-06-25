@@ -70,7 +70,15 @@ describe('scan_webstandard', () => {
     assert.ok(v.length > 0, 'W-09 should detect missing charset meta tag');
   });
 
-  it('returns 0 T1 violations for sample-good.jsp', async () => {
+  it('detects inline style W-11 in sample-bad.jsp', async () => {
+    const results = await scanWebstandard(path.join(fixturesDir, 'sample-bad.jsp'), rules);
+    const v = results.filter(v => v.id === 'W-11');
+    assert.ok(v.length >= 2, `W-11 should detect inline style= attributes (color/background), got ${v.length}`);
+    assert.strictEqual(v[0].severity, 'warning');
+    assert.ok(v.some(x => /style=/.test(x.code)), 'code should contain a style= attribute');
+  });
+
+  it('returns 0 T1 violations for sample-good.jsp (인라인 style 없음 포함)', async () => {
     const results = await scanWebstandard(path.join(fixturesDir, 'sample-good.jsp'), rules);
     const t1Violations = results.filter(v => v.tier === 'T1');
     assert.strictEqual(t1Violations.length, 0, `Expected 0 T1 violations, got: ${JSON.stringify(t1Violations)}`);

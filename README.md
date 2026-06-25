@@ -33,16 +33,26 @@ Plugins > Discover > "govcheck" > Space to install
 /govcheck --no-quality --no-gs          # 특정 영역 제외
 /govcheck --only accessibility,securecoding  # 특정 영역만
 /govcheck --severity critical            # 심각도 필터
+/govcheck --file src/main/webapp/.../index.jsp  # 단일 파일/페이지만 점검
+/govcheck --report                       # 미흡 사항을 보고서(Markdown)로 생성
 /govcheck-diff --staged                  # staged 변경분만
 /govcheck-diff --committed               # 마지막 커밋 변경분
 ```
+
+### 점검 단위 & 리포트
+
+- **전체**: `scan_all` (프로젝트 전체) · **단일 파일/페이지**: `scan_file({ filePath })` — 확장자에 맞는 도메인만 자동 적용.
+- **리포트**: `scan_report({ projectRoot | filePath, format })` 또는 CLI
+  `node scripts/report-cli.cjs <projectRoot> [--file <경로>] [--format md|html|both] [--out report]`.
+  골격: 요약(부적합·적합추정·수동확인) → 도메인별 합불 표 → 부적합 상세(파일:라인+조치) → 수동확인 안내.
+  > 정적으로 판정 불가한 항목(예: **이미지 내 텍스트의 alt 전수 반영** — 자동 OCR 미지원)은 "수동확인"으로 정직하게 표기.
 
 ## 7 Compliance Domains
 
 | Domain | Description | Rules |
 |--------|-------------|-------|
 | **KWCAG 2.2 웹접근성** | 한국형 웹콘텐츠 접근성 지침 2.2 | 46 rules (33 항목) |
-| **웹표준** | HTML/CSS 유효성, 시맨틱 마크업 | 10 items |
+| **웹표준** | HTML/CSS 유효성, 시맨틱 마크업, 인라인 스타일(W-11) | 11 items |
 | **시큐어코딩** | 행안부 소프트웨어 개발보안 가이드 | 49 items |
 | **개인정보보호** | 개인정보 노출 진단 | 9 items |
 | **eGov 호환성** | 전자정부프레임워크 호환성 | 8 items |
@@ -74,11 +84,13 @@ KWCAG 2.2 표준 33개 검사항목을 46개 정적 규칙으로 점검합니다
 
 | ID | 변경 | 사유 |
 |----|------|------|
-| A-09 | 명도대비 색상 패턴에 `(?<![\w-])` 경계 추가 | `background-color`·`border-color`·`outline-color` 오탐 제거 |
-| A-25 | T3(claude) → T2(regex) 승격, `outline:none`/`0` 탐지 | 초점 표시 제거는 정적으로 신뢰성 있게 탐지 가능 |
+| A-05 | `html lang` 누락을 **소스의 실제 `<html>` 태그에서만** 판정 (cheerio 합성 `<html>` 무시) | Tiles 조각·include마다 합성되는 `<html>`로 인한 대량 오탐 제거 — 실제 standalone 문서만 탐지 |
+| A-09 | 명도대비 색상 패턴에 `(?<![\w-])` 경계 추가 + **CSS 파일 스캔 대상 포함** | `background-color` 등 오탐 제거 / 외부 스타일시트의 하드코딩 텍스트 색도 탐지 |
+| A-18 | fileTypes에서 `css` 제거 (JSP/HTML 인라인 한정) | CSS 전반의 `font-size:px` 대량 오탐 방지 — px 고정은 인라인 스타일에서만 탐지 |
+| A-25 | T3(claude) → T2(regex) 승격, `outline:none`/`0` 탐지 + **CSS 파일 스캔 대상 포함** | 초점 표시 제거를 정적으로 탐지 — 외부 CSS의 초점 제거까지 포착 |
 | A-40 | T1 → T3(수동 점검) 강등 | 카드형 `a`의 `display`는 외부 CSS 클래스에 정의돼 단일 파일 정적 판정 불가 (실측 100% 오탐) |
 
-> **설계 원칙:** 모든 신규 규칙은 2개 독립 분석(coverage-maximizer vs false-positive skeptic) + 실프로젝트 오탐 실측을 거쳐, **단일 파일 정적 분석으로 신뢰성 있게 탐지되는 것만** 채택했습니다. 외부 CSS·크로스파일(JSP include/Tiles)·런타임 상태·계산값(명도 대비)에 의존하는 항목은 T3(수동 점검)로 분류하거나 제외합니다. 중복 id(KWCAG 32)는 웹표준 스캐너 W-07이 담당하여 도메인 간 중복을 피합니다. regex 계열 규칙은 JSP/HTML **주석 내부를 마스킹**(오프셋 보존)하고 스캔하여 주석 처리된 옛 마크업 오탐을 방지합니다.
+> **설계 원칙:** 모든 신규 규칙은 2개 독립 분석(coverage-maximizer vs false-positive skeptic) + 실프로젝트 오탐 실측을 거쳐, **신뢰성 있게 탐지되는 것만** 채택했습니다. 카드형 `display` 등 외부 CSS 클래스 의존·크로스파일(JSP include/Tiles)·런타임 상태·계산값(명도 대비 *계산*)에 의존하는 항목은 T3(수동 점검)로 분류하거나 제외합니다. 단, **regex 계열의 A-09(텍스트 색)·A-25(초점 제거)는 외부 CSS 파일 자체를 직접 스캔**해 정적 단계에서 보완합니다(접근성 도메인의 CSS 패스 — vendor/번들 CSS는 `cssVendorIgnore`로 제외). 중복 id(KWCAG 32)는 웹표준 스캐너 W-07이 담당하여 도메인 간 중복을 피합니다. regex 계열 규칙은 JSP/HTML·CSS **주석 내부를 마스킹**(오프셋 보존)하고 스캔하여 주석 처리된 옛 마크업 오탐을 방지합니다.
 
 ## 동적 키보드 접근성 감사 (Playwright)
 
@@ -93,7 +105,10 @@ node scripts/keyboard-audit-cli.cjs https://site.go.kr/index.do --max-pages 20
 node scripts/keyboard-audit-cli.cjs https://site.go.kr/index.do --json   # JSON 출력
 ```
 
-MCP 도구로도 노출: `audit_keyboard({ baseUrl, maxPages?, maxTabs?, sameOriginOnly? })`
+MCP 도구로도 노출: `audit_keyboard({ baseUrl, maxPages?, maxTabs?, sameOriginOnly?, ignoreSelectors? })`
+
+- `ignoreSelectors`: 통제 불가 영역(예: 공용 GNB) CSS 셀렉터 목록 — 매칭 요소는 K-01~K-05에서 제외. **cross-origin `<iframe>`은 (내부 측정 불가라) 기본 제외**됩니다.
+- `scan_all`에 동적 감사 통합(opt-in): `scan_all({ projectRoot, baseUrl, dynamicUrls?, ignoreSelectors?, maxPages?, maxTabs? })` — `baseUrl`을 주면 정적 7개 도메인 + 동적 `keyboard` 도메인을 함께 반환합니다(미지정 시 정적만, 기존과 동일).
 
 | ID | 탐지 내용 | KWCAG | severity |
 |----|-----------|-------|----------|
@@ -130,9 +145,12 @@ Create `.govcheckrc.json` in your project root:
   "ignore": [
     "src/main/webapp/test/**"
   ],
+  "cssVendorIgnore": [".min.css", "/lib/", "/vendor/", "/plugins/", "/dist/", "/ckeditor/"],
   "maxResults": 100
 }
 ```
+
+> **접근성 CSS 스캔:** `accessibility` 도메인은 JSP뿐 아니라 `paths.css`의 CSS 파일도 스캔해 외부 스타일시트의 초점 제거(A-25)·하드코딩 텍스트 색(A-09)을 잡습니다. 팀이 고칠 수 없는 vendor/번들/압축 CSS의 대량 오탐을 막기 위해 경로에 `cssVendorIgnore`의 조각(기본: `.min.css`·`/lib/`·`/vendor/`·`/plugins/`·`/dist/`·`/ckeditor/`)이 포함된 CSS는 스캔에서 제외합니다.
 
 ## Architecture
 
@@ -142,6 +160,8 @@ Create `.govcheckrc.json` in your project root:
 
 - **Skill**: Parses options, calls MCP tools, filters false positives, generates reports
 - **MCP Server**: File scanning, regex matching, HTML/JSP parsing — fast deterministic analysis
+  - 점검 도구: `scan_all`(전체) · `scan_file`(단일 파일) · `scan_diff`(변경분) · `audit_keyboard`(동적) · `scan_report`(리포트 생성)
+- **Report**: `scripts/lib/report.cjs` (+ `report-cli.cjs`) — 점검 결과를 Markdown/HTML 리포트로 변환
 - **Agent**: Applies auto-fixes to source code with safety constraints
 
 ## Target Stack
@@ -155,9 +175,11 @@ Create `.govcheckrc.json` in your project root:
 
 | Tier | Confidence | Auto-Fix |
 |------|-----------|----------|
-| T1 | High — regex/parsing exact match | Yes |
-| T2 | Medium — pattern heuristic | Conditional |
-| T3 | Low — requires Claude context | Report only |
+| T1 | High — regex/parsing exact match | per-rule `autoFixable` flag |
+| T2 | Medium — pattern heuristic | per-rule `autoFixable` flag |
+| T3 | Low — requires Claude context | Report only (manual) |
+
+> Tier는 **탐지 신뢰도**, `autoFixable`은 **자동수정 가능 여부**로 서로 독립적이다(예: W-11 인라인 스타일은 T1이지만 안전한 자동수정이 불가능하므로 `autoFixable:false`). 또한 정적 도메인 스캐너는 **accessibility만 T1·T2를 실행**하고 나머지(webstandard/securecoding/privacy/quality/webvuln)는 **T1만** 실행한다 — 리포트의 "위반 미발견" 집계는 이 실제 실행 tier만 대상으로 한다.
 
 ## Contributing
 

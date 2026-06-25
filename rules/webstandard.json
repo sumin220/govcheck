@@ -123,6 +123,18 @@
       "fileTypes": ["html", "jsp"],
       "category": "문서 구조",
       "autoFixable": false
+    },
+    {
+      "id": "W-11",
+      "title": "인라인 스타일 사용 (style 속성)",
+      "description": "요소에 직접 style 속성을 작성하면 표현과 구조가 분리되지 않아 유지보수가 어렵고, CSP(unsafe-inline) 적용을 막으며, 일관된 디자인 관리를 해칩니다. 외부 CSS 클래스로 분리해야 합니다.",
+      "severity": "warning",
+      "tier": "T1",
+      "pattern": "[style]",
+      "patternType": "css-selector",
+      "fileTypes": ["html", "jsp", "vue", "ejs"],
+      "category": "표현/구조 분리",
+      "autoFixable": false
     }
   ]
 }
