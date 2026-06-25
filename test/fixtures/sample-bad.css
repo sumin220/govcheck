@@ -1,0 +1,6 @@
+/* 주석 안의 outline: none; 과 color:#000 은 마스킹되어 미발화여야 함 */
+a:focus { outline: none; }
+.btn:focus { outline: 0; }
+.label { color: #777; }
+.small { font-size: 12px; }
+.bg { background-color: #ffffff; } /* A-09 미발화: background-color는 텍스트 색 아님 */

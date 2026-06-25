@@ -2,7 +2,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
-const { scanAccessibility } = require('../scripts/lib/scanners/accessibility.cjs');
+const { scanAccessibility, scanAccessibilityCss } = require('../scripts/lib/scanners/accessibility.cjs');
 const { loadRules } = require('../scripts/lib/rules-loader.cjs');
 
 describe('scan_accessibility', () => {
@@ -166,5 +166,59 @@ describe('scan_accessibility', () => {
     const ids = ['A-34','A-36','A-37','A-38','A-41','A-25','A-09','A-43','A-44','A-45','A-46','A-47','A-48','A-49'];
     const fp = r.filter(v => ids.includes(v.id));
     assert.strictEqual(fp.length, 0, `good file should be clean, got: ${JSON.stringify(fp.map(v=>v.id+':'+v.code))}`);
+  });
+
+  // 개선 #1: A-05 조각 오탐 제거 — 소스에 실제 <html> 태그가 있을 때만 발화.
+  it('A-05: Tiles 조각(자체 <html> 없음)은 미발화 (cheerio 합성 오탐 방지)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir, 'sample-fragment.jsp'), rules);
+    assert.strictEqual(r.filter(v => v.id === 'A-05').length, 0,
+      'A-05는 소스에 실제 <html> 태그가 없으면 발화하면 안 됨');
+  });
+  it('A-05: 실제 <html> 태그(lang 없음)는 여전히 발화 (sample-bad.jsp)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir, 'sample-bad.jsp'), rules);
+    const a05 = r.filter(v => v.id === 'A-05');
+    assert.strictEqual(a05.length, 1, '실제 <html> 1개(lang 없음) → 정확히 1건');
+    assert.ok(/<html/i.test(a05[0].code), 'code에 실제 <html> 태그 포함');
+  });
+  it('A-05: <html lang> 보유 문서는 미발화 (sample-good.jsp)', async () => {
+    const r = await scanAccessibility(path.join(fixturesDir, 'sample-good.jsp'), rules);
+    assert.strictEqual(r.filter(v => v.id === 'A-05').length, 0, 'lang 보유 → 미발화');
+  });
+});
+
+// 개선 #2: 접근성 파이프라인 CSS 스캔 — css fileType 보유 regex 규칙(A-09/A-18/A-25)을 CSS 파일에 적용.
+describe('scanAccessibilityCss (CSS 파일 스캔)', () => {
+  const fixturesDir = path.join(__dirname, 'fixtures');
+  const rules = loadRules(path.join(__dirname, '..', 'rules')).kwcag22;
+
+  it('bad CSS: A-25(outline 제거)·A-09(텍스트 색) 발화, A-18(px)은 CSS 미적용', async () => {
+    const r = await scanAccessibilityCss(path.join(fixturesDir, 'sample-bad.css'), rules);
+    assert.strictEqual(r.filter(v => v.id === 'A-25').length, 2, 'outline:none + outline:0 = 2건');
+    const a09 = r.filter(v => v.id === 'A-09');
+    assert.strictEqual(a09.length, 1, 'color:#777 1건 (background-color 제외)');
+    assert.ok(!a09.some(v => /background-color/i.test(v.code)), 'background-color 미발화');
+    // A-18(px)은 CSS 전반에 대량 오탐을 유발해 fileTypes에서 css를 제외함 → CSS 스캔 미적용.
+    assert.strictEqual(r.filter(v => v.id === 'A-18').length, 0, 'A-18은 CSS에 미적용(px-flood 방지)');
+  });
+  it('bad CSS: 주석 내부 패턴은 마스킹되어 미발화', async () => {
+    const r = await scanAccessibilityCss(path.join(fixturesDir, 'sample-bad.css'), rules);
+    // 주석의 outline:none/color:#000 이 카운트에 포함되면 A-25가 3건이 됨 → 2건이어야 정상
+    assert.strictEqual(r.filter(v => v.id === 'A-25').length, 2, '주석 outline:none 제외');
+  });
+  it('bad CSS: css-selector 규칙(A-01 등)은 CSS에 적용 안 됨', async () => {
+    const r = await scanAccessibilityCss(path.join(fixturesDir, 'sample-bad.css'), rules);
+    assert.ok(!r.some(v => v.id === 'A-01'), 'CSS에는 마크업 셀렉터 규칙 미적용');
+    assert.ok(r.every(v => v.patternType === undefined || v.category !== undefined), '스키마 정상');
+  });
+  it('good CSS: 0건', async () => {
+    const r = await scanAccessibilityCss(path.join(fixturesDir, 'sample-good.css'), rules);
+    assert.strictEqual(r.length, 0, `good CSS는 깨끗해야 함: ${JSON.stringify(r.map(v=>v.id+':'+v.code))}`);
+  });
+  it('violation 스키마: file/line/id/confidence 보유', async () => {
+    const r = await scanAccessibilityCss(path.join(fixturesDir, 'sample-bad.css'), rules);
+    const v = r[0];
+    assert.ok(v.id && v.title && v.severity && v.file);
+    assert.ok(typeof v.line === 'number' && v.line > 0);
+    assert.ok(['high','medium','low'].includes(v.confidence));
   });
 });

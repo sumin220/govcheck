@@ -56,7 +56,7 @@
     </select>
     <button type="button" id="searchBtn">검색</button>
     <img src="/seoulgallery/common/ckeditor/getImg.do?uniqueId=123" alt="프로그램 안내 포스터" width="1080">
-    <a href="/detail" style="display:block"><div class="card-box"><img src="/img.jpg" alt="카드 이미지"></div></a>
+    <a href="/detail" class="card-link"><div class="card-box"><img src="/img.jpg" alt="카드 이미지"></div></a>
     <img alt="" src="/images/decoration.svg" aria-hidden="true">
     <style>a:focus-visible { outline: 2px solid #000; }</style>
     <label for="memo2">메모</label>

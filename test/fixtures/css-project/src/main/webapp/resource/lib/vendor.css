@@ -1,0 +1,3 @@
+/* 번들 vendor CSS — cssVendorIgnore('/lib/')로 접근성 CSS 스캔에서 제외돼야 함 */
+.vendor-widget:focus { outline: none; }
+.vendor-label { color: #888; }

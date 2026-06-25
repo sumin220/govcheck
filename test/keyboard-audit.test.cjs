@@ -130,6 +130,54 @@ describe('keyboard-audit: analyzePage (순수 분석)', () => {
   });
 });
 
+// 개선 #3b: 통제 불가 영역(cross-origin iframe·공용 GNB) 제외 — external:true 항목은 미발화.
+describe('keyboard-audit: external 제외 (오탐 감소)', () => {
+  const url = 'https://example.go.kr/page.do';
+
+  it('K-01: external 후보는 미발화', () => {
+    const probe = {
+      candidates: [
+        { auditId: 'a', sel: 'div', code: '<div>', reason: 'onclick' },
+        { auditId: 'b', sel: 'p.seoul-gnb', code: '<p class="seoul-gnb">', reason: 'onclick', external: true }
+      ],
+      positiveTabindex: []
+    };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: false } };
+    const k01 = analyzePage(probe, walk, url, rules).filter(v => v.id === 'K-01');
+    assert.strictEqual(k01.length, 1, 'external 후보 1건 제외 → 1건만');
+  });
+  it('K-02: external 양수 tabindex 미발화', () => {
+    const probe = { candidates: [], positiveTabindex: [{ tabindex: 3, sel: 'a', code: '<a>', external: true }] };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: false } };
+    assert.strictEqual(analyzePage(probe, walk, url, rules).filter(v => v.id === 'K-02').length, 0);
+  });
+  it('K-03: external 포커스(예: cross-origin iframe)는 미발화', () => {
+    const probe = { candidates: [], positiveTabindex: [] };
+    const walk = { reachedAuditIds: [], focusInvisible: [{ sel: 'iframe', code: '<iframe>', external: true }], trap: { detected: false } };
+    assert.strictEqual(analyzePage(probe, walk, url, rules).filter(v => v.id === 'K-03').length, 0);
+  });
+  it('K-04: external 트랩(cross-origin iframe)은 미발화', () => {
+    const probe = { candidates: [], positiveTabindex: [] };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: true, at: 5, sel: 'iframe', external: true } };
+    assert.strictEqual(analyzePage(probe, walk, url, rules).filter(v => v.id === 'K-04').length, 0);
+  });
+  it('K-05: external 명도대비(공용 GNB)는 미발화', () => {
+    const probe = {
+      candidates: [], positiveTabindex: [],
+      contrastFails: [
+        { text: 'a', ratio: 2.1, threshold: 4.5, fg: 'rgb(0,0,0)', bg: 'rgb(255,255,255)', fontSize: 14, large: false, code: '<a>', external: true }
+      ]
+    };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: false } };
+    assert.strictEqual(analyzePage(probe, walk, url, rules).filter(v => v.id === 'K-05').length, 0);
+  });
+  it('비-external 항목은 정상 발화 (회귀 가드)', () => {
+    const probe = { candidates: [{ auditId: 'a', sel: 'div', code: '<div>', reason: 'onclick' }], positiveTabindex: [] };
+    const walk = { reachedAuditIds: [], focusInvisible: [], trap: { detected: false } };
+    assert.strictEqual(analyzePage(probe, walk, url, rules).filter(v => v.id === 'K-01').length, 1);
+  });
+});
+
 describe('keyboard-audit: URL 유틸', () => {
   it('normalizeUrl은 해시 제거', () => {
     assert.strictEqual(normalizeUrl('https://a.go.kr/x?y=1#frag'), 'https://a.go.kr/x?y=1');
