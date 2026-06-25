@@ -34,8 +34,8 @@ function parseArgs(argv) {
     process.stderr.write('usage: report-cli.cjs <projectRoot> [--file <path>] [--format md|html|both] [--out <basepath>]\n');
     process.exit(1);
   }
-  if (!['md', 'html', 'both'].includes(opt.format)) {
-    process.stderr.write(`invalid --format "${opt.format}" (md|html|both)\n`);
+  if (!['md', 'html', 'csv', 'both'].includes(opt.format)) {
+    process.stderr.write(`invalid --format "${opt.format}" (md|html|csv|both)\n`);
     process.exit(1);
   }
 
@@ -49,8 +49,9 @@ function parseArgs(argv) {
   if (opt.out) {
     if (opt.format === 'md' || opt.format === 'both') fs.writeFileSync(opt.out + '.md', rep.markdown);
     if (opt.format === 'html' || opt.format === 'both') fs.writeFileSync(opt.out + '.html', rep.html);
+    if (opt.format === 'csv') fs.writeFileSync(opt.out + '.csv', '﻿' + rep.csv);  // BOM: Excel 한글
     process.stderr.write(`리포트 생성: ${opt.out}.${opt.format === 'both' ? 'md/.html' : opt.format} (부적합 ${rep.data.totals.violations}건)\n`);
   } else {
-    process.stdout.write(opt.format === 'html' ? rep.html : rep.markdown);
+    process.stdout.write(opt.format === 'html' ? rep.html : opt.format === 'csv' ? rep.csv : rep.markdown);
   }
 })().catch((e) => { process.stderr.write('REPORT_ERROR ' + (e && e.stack || e) + '\n'); process.exit(1); });

@@ -3,7 +3,7 @@
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { summarize, toMarkdown, toHtml, generateReport } = require('../scripts/lib/report.cjs');
+const { summarize, toMarkdown, toHtml, toCsv, generateReport } = require('../scripts/lib/report.cjs');
 
 const scanResult = {
   file: 'src/main/webapp/x.jsp',
@@ -99,6 +99,22 @@ describe('report.toMarkdown / toHtml', () => {
     assert.ok(html.startsWith('<!DOCTYPE html>'));
     assert.ok(html.includes('govcheck 점검 결과 리포트'));
     assert.ok(html.includes('A-44'));
+  });
+});
+
+describe('report.toCsv (작업용 전체 목록)', () => {
+  it('헤더 + 위반당 한 행, 요약과 달리 전부 펼침', () => {
+    const csv = toCsv(scanResult);
+    const lines = csv.split('\n');
+    assert.ok(lines[0].includes('ruleId') && lines[0].includes('file') && lines[0].includes('suggestion'), '헤더');
+    // 위반 3건(A-44 x2 + A-01) → 헤더 1 + 3행 = 4
+    assert.strictEqual(lines.length, 4, '위반당 한 행(요약 샘플 제한 없음)');
+    assert.ok(csv.includes('A-44') && csv.includes('A-01'));
+  });
+  it('콤마/따옴표 포함 필드 안전 이스케이프', () => {
+    const sr = { results: [ { domain: 'accessibility', violations: [ { id: 'A-09', title: '색, "대비"', severity: 'warning', tier: 'T2', file: 'x.jsp', line: 1, code: 'a,b', suggestion: 'fix, now' } ] } ] };
+    const csv = toCsv(sr);
+    assert.ok(csv.includes('"색, ""대비"""'), '콤마+따옴표 이스케이프');
   });
 });
 

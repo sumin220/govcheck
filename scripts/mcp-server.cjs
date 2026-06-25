@@ -270,6 +270,7 @@ async function handleScanReport(args) {
     markdown: rep.markdown
   };
   if (args.format === 'html' || args.format === 'both') out.html = rep.html;
+  if (args.format === 'csv' || args.format === 'both') out.csv = rep.csv;  // 전체 위반 목록(작업용)
   return out;
 }
 
@@ -573,7 +574,7 @@ const TOOL_DEFINITIONS = [
       properties: {
         projectRoot: { type: 'string', description: 'Absolute path to the project root (전체 점검 시)' },
         filePath: { type: 'string', description: '(선택) 단일 파일만 점검할 경로' },
-        format: { type: 'string', enum: ['md', 'html', 'both'], description: "출력 형식 (기본 md). 'both'면 html도 포함." },
+        format: { type: 'string', enum: ['md', 'html', 'csv', 'both'], description: "출력 형식 (기본 md). 'csv'=전체 위반 한 줄씩(작업용 목록), 'both'=md+html." },
         maxResults: { type: 'number', description: 'Maximum number of violations per domain (default: 100)' }
       },
       required: []
@@ -736,7 +737,7 @@ async function handleToolCall(toolName, args) {
 // Start MCP server when run directly
 if (require.main === module) {
   const server = new Server(
-    { name: 'govcheck', version: '1.4.0' },
+    { name: 'govcheck', version: '1.5.0' },
     { capabilities: { tools: {} } }
   );
 
